@@ -44,7 +44,6 @@ const InStockView = ({ user }) => {
 
     // Define the columns specific to the In-Stock view
     const inStockColumns = [
-        { title: 'Asset ID', dataIndex: 'assetId', key: 'assetId' },
         { title: 'Category', dataIndex: 'category', key: 'category' },
         { title: 'Model', dataIndex: 'model', key: 'model' },
         { title: 'Warranty Expiry', dataIndex: 'warrantyInfo', key: 'warrantyInfo', render: renderWarrantyTag },

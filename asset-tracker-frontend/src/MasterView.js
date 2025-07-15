@@ -1,7 +1,7 @@
 import React from 'react';
 import { Tag, Typography } from 'antd';
 import moment from 'moment';
-import PageShell from './PageShell'; // Import the new reusable component
+import PageShell from './PageShell'; // Import the reusable component
 
 const { Text } = Typography;
 
@@ -34,14 +34,8 @@ const getStatusColor = (status) => {
 const MasterView = ({ user, setExpiringItems }) => {
 
     // Define the columns for the Master View table.
-    // The "Action" column will be added automatically by PageShell.
+    // The "SI No" and "Action" columns are added automatically by PageShell.
     const masterViewColumns = [
-        {
-            title: 'SI No',
-            key: 'siNo',
-            render: (_, record, index) => index + 1,
-            width: 80,
-        },
         {
             title: 'Category',
             dataIndex: 'category',
@@ -80,7 +74,6 @@ const MasterView = ({ user, setExpiringItems }) => {
             tableColumns={masterViewColumns}
             user={user}
             setExpiringItems={setExpiringItems}
-            // No initialFilters needed here as we want to show all items
         />
     );
 };
