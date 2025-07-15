@@ -1,30 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import { Form, Input, Button, Select, message, Row, Col, Card, Typography, DatePicker } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import moment from 'moment';
 
 const { Option } = Select;
 const { Title } = Typography;
 
-const generateAssetId = async (category = '') => {
-    let prefix = category ? category.substring(0, 3).toUpperCase() : 'OTH'; 
-    try {
-        const response = await axios.get(`http://localhost:5000/api/equipment/count/${category}`, {
-            headers: getAuthHeader()
-        });
-
-        const existingCount = response.data.count || 0; 
-        const newIdNumber = (existingCount + 1).toString().padStart(3, '0'); 
-        return `${prefix}-${newIdNumber}`; 
-    } catch (err) {
-        console.error("Error generating assetId", err);
-        return `${prefix}-ERR`;
-    }
-};
-
-
-// get JWT token from localStorage for all equipment requests
+// This helper function can be moved to a shared utils file
 const getAuthHeader = () => {
     const token = localStorage.getItem('token');
     return token ? { 'x-auth-token': token } : {};
@@ -33,58 +15,66 @@ const getAuthHeader = () => {
 const AddEquipment = () => {
     const [form] = Form.useForm();
     const navigate = useNavigate();
+    const [status, setStatus] = useState('In Stock');
+    const [category, setCategory] = useState('');
 
-    const [formData, setFormData] = useState({
-        status: 'In Stock',
-        category: '',
-        customCategory: '',
-    });
-
-useEffect(() => {
-    const fetchAssetId = async () => {
-        const categoryToUse = formData.category === 'Other' ? formData.customCategory : formData.category;
-        if (!categoryToUse) {
-            form.setFieldsValue({ assetId: '' });
-            return;
+    // This function generates the unique ID for the asset
+    const generateAssetId = async (cat = '') => {
+        const prefix = cat ? cat.substring(0, 3).toUpperCase() : 'OTH';
+        try {
+            const response = await axios.get(`http://localhost:5000/api/equipment/count/${cat}`, {
+                headers: getAuthHeader()
+            });
+            const count = response.data.count || 0;
+            const newIdNumber = (count + 1).toString().padStart(3, '0');
+            return `${prefix}-${newIdNumber}`;
+        } catch (err) {
+            console.error("Error generating assetId", err);
+            // Provide a fallback ID in case of an error
+            return `${prefix}-ERR-${Date.now()}`;
         }
-
-        const newAssetId = await generateAssetId(categoryToUse);
-        form.setFieldsValue({ assetId: newAssetId });
     };
-
-    fetchAssetId();
-}, [formData.category, formData.customCategory, form]);
-
 
     const onFinish = async (values) => {
-        const categoryToUse = values.category === 'Other' ? values.customCategory : values.category;
-    const assetId = await generateAssetId(categoryToUse);
-    
-    const finalValues = {
-        ...values,
-        assetId: assetId, // Add this line
-        warrantyInfo: values.warrantyInfo ? values.warrantyInfo.format('YYYY-MM-DD') : null,
-        category: values.category === 'Other' ? values.customCategory : values.category,
-    };
-
-        console.log("Auth Header:", getAuthHeader());
-
         try {
+            // Determine the final category
+            const categoryToUse = values.category === 'Other' ? values.customCategory : values.category;
+
+            // --- FIX: Generate the assetId here, right before submission ---
+            const assetId = await generateAssetId(categoryToUse);
+
+            const finalValues = {
+                ...values,
+                assetId: assetId,
+                category: categoryToUse,
+                warrantyInfo: values.warrantyInfo ? values.warrantyInfo.format('YYYY-MM-DD') : null,
+            };
+
+            // Remove the temporary customCategory field if it exists
+            delete finalValues.customCategory;
+
             await axios.post('http://localhost:5000/api/equipment', finalValues, { headers: getAuthHeader() });
             message.success('Equipment added successfully!');
-            navigate('/');
+            navigate('/'); // Redirect to the main inventory page
         } catch (error) {
             console.error("Error adding equipment:", error);
             message.error(error.response?.data?.message || 'Failed to add equipment.');
         }
     };
 
-    const handleFormChange = (changedValues, allValues) => {
-        setFormData(allValues);
+    // We only need to track the values that change the form's structure
+    const handleValuesChange = (changedValues) => {
+        if (changedValues.status) {
+            setStatus(changedValues.status);
+        }
+        if (changedValues.category) {
+            setCategory(changedValues.category);
+        }
     };
 
+    // Render conditional fields based on the selected status
     const renderDynamicFields = () => {
-        if (formData.status === 'In Use') {
+        if (status === 'In Use') {
             return (
                 <Card title="Assignee Details" bordered={false} style={{ marginBottom: 24 }}>
                     <Row gutter={16}>
@@ -97,7 +87,7 @@ useEffect(() => {
                 </Card>
             );
         }
-        if (formData.status === 'Damaged') {
+        if (status === 'Damaged') {
             return (
                 <Card title="Damage Information" bordered={false} style={{ marginBottom: 24 }}>
                     <Form.Item name="damageDescription" label="Damage Description" rules={[{ required: true }]}>
@@ -113,15 +103,49 @@ useEffect(() => {
         <div style={{ background: '#f0f2f5', padding: '24px' }}>
             <Card style={{ maxWidth: 800, margin: 'auto' }}>
                 <Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>Add New Equipment</Title>
-                <Form form={form} layout="vertical" onFinish={onFinish} onValuesChange={handleFormChange} initialValues={formData}>
+                <Form
+                    form={form}
+                    layout="vertical"
+                    onFinish={onFinish}
+                    onValuesChange={handleValuesChange}
+                    initialValues={{ status: 'In Stock' }}
+                >
                     <Card title="Core Information" bordered={false} style={{ marginBottom: 24 }}>
                         <Row gutter={16}>
-                            <Col xs={24} sm={12}><Form.Item name="category" label="Category" rules={[{ required: true }]}><Select placeholder="Select a category"><Option value="Laptop">Laptop</Option><Option value="Headset">Headset</Option><Option value="Keyboard">Keyboard</Option><Option value="Mouse">Mouse</Option><Option value="Monitor">Monitor</Option><Option value="Other">Other</Option></Select></Form.Item></Col>
-                            {formData.category === 'Other' && (<Col xs={24} sm={12}><Form.Item name="customCategory" label="Custom Category Name" rules={[{ required: true }]}><Input placeholder="e.g., Docking Station" /></Form.Item></Col>)}
-                            <Col xs={24} sm={12}><Form.Item name="status" label="Status" rules={[{ required: true }]}><Select><Option value="In Stock">In Stock</Option><Option value="In Use">In Use</Option><Option value="Damaged">Damaged</Option><Option value="E-Waste">E-Waste</Option></Select></Form.Item></Col>
+                            <Col xs={24} sm={12}>
+                                <Form.Item name="category" label="Category" rules={[{ required: true }]}>
+                                    <Select placeholder="Select a category">
+                                        <Option value="Laptop">Laptop</Option>
+                                        <Option value="Headset">Headset</Option>
+                                        <Option value="Keyboard">Keyboard</Option>
+                                        <Option value="Mouse">Mouse</Option>
+                                        <Option value="Monitor">Monitor</Option>
+                                        <Option value="Other">Other</Option>
+                                    </Select>
+                                </Form.Item>
+                            </Col>
+                            {category === 'Other' && (
+                                <Col xs={24} sm={12}>
+                                    <Form.Item name="customCategory" label="Custom Category Name" rules={[{ required: true }]}>
+                                        <Input placeholder="e.g., Docking Station" />
+                                    </Form.Item>
+                                </Col>
+                            )}
+                            <Col xs={24} sm={12}>
+                                <Form.Item name="status" label="Status" rules={[{ required: true }]}>
+                                    <Select>
+                                        <Option value="In Stock">In Stock</Option>
+                                        <Option value="In Use">In Use</Option>
+                                        <Option value="Damaged">Damaged</Option>
+                                        <Option value="E-Waste">E-Waste</Option>
+                                    </Select>
+                                </Form.Item>
+                            </Col>
                         </Row>
                     </Card>
+
                     {renderDynamicFields()}
+
                     <Card title="Hardware & Warranty Details" bordered={false} style={{ marginBottom: 24 }}>
                         <Row gutter={16}>
                             <Col xs={24} sm={12}><Form.Item name="model" label="Model / Brand"><Input placeholder="e.g., Dell Latitude 5420" /></Form.Item></Col>
@@ -130,8 +154,15 @@ useEffect(() => {
                             <Col xs={24} sm={12}><Form.Item name="warrantyInfo" label="Warranty Expiry Date"><DatePicker style={{ width: '100%' }} /></Form.Item></Col>
                         </Row>
                     </Card>
-                    <Form.Item name="comment" label="Additional Comments"><Input.TextArea rows={3} placeholder="Any other relevant details..." /></Form.Item>
-                    <Form.Item style={{ textAlign: 'center' }}><Button type="primary" htmlType="submit" size="large" style={{ width: '50%' }}>Add Equipment</Button></Form.Item>
+
+                    <Form.Item name="comment" label="Additional Comments">
+                        <Input.TextArea rows={3} placeholder="Any other relevant details..." />
+                    </Form.Item>
+                    <Form.Item style={{ textAlign: 'center' }}>
+                        <Button type="primary" htmlType="submit" size="large" style={{ width: '50%' }}>
+                            Add Equipment
+                        </Button>
+                    </Form.Item>
                 </Form>
             </Card>
         </div>
