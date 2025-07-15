@@ -1,4 +1,3 @@
-// src/MasterView.js
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Table, Button, Modal, Tag, message, Card, Dropdown, Typography, Space, Popconfirm, Input, Form, Row, Col, Select, DatePicker, Popover, Badge } from 'antd';
@@ -30,6 +29,12 @@ const TableStyleInjector = () => {
     return null;
 };
 
+// get JWT token from localStorage for all equipment requests
+const getAuthHeader = () => {
+    const token = localStorage.getItem('token');
+    return token ? { 'x-auth-token': token } : {};
+};
+
 const MasterView = ({ user, setExpiringItems }) => {
     const [equipment, setEquipment] = useState([]);
     const [filteredEquipment, setFilteredEquipment] = useState([]);
@@ -44,7 +49,7 @@ const MasterView = ({ user, setExpiringItems }) => {
 
     const fetchEquipment = async () => {
         try {
-            const response = await axios.get('http://localhost:5000/api/equipment');
+            const response = await axios.get('http://localhost:5000/api/equipment', { headers: getAuthHeader() });
             const data = response.data;
             setEquipment(data);
             setFilteredEquipment(data);
@@ -121,7 +126,7 @@ const MasterView = ({ user, setExpiringItems }) => {
 
     const handleDelete = async (id) => {
         try {
-            await axios.delete(`http://localhost:5000/api/equipment/${id}`);
+            await axios.delete(`http://localhost:5000/api/equipment/${id}`, { headers: getAuthHeader() });
             fetchEquipment();
             message.success('Equipment deleted successfully');
         } catch (error) { message.error('Failed to delete equipment.'); }
@@ -143,7 +148,7 @@ const MasterView = ({ user, setExpiringItems }) => {
         try {
             const values = await form.validateFields();
             const finalValues = { ...values, warrantyInfo: values.warrantyInfo ? values.warrantyInfo.format('YYYY-MM-DD') : null };
-            await axios.put(`http://localhost:5000/api/equipment/${selectedEquipment._id}`, finalValues);
+            await axios.put(`http://localhost:5000/api/equipment/${selectedEquipment._id}`, finalValues, { headers: getAuthHeader() });
             message.success('Equipment updated successfully!');
             setIsEditModalOpen(false);
             fetchEquipment();
@@ -163,7 +168,7 @@ const MasterView = ({ user, setExpiringItems }) => {
     };
 
     const columns = [
-        { title: 'Asset ID', dataIndex: 'assetId', key: 'assetId' },
+        { title: 'SI No', key: 'siNo', render: (_, record, index) => index + 1,width: 80},
         { title: 'Category', dataIndex: 'category', key: 'category' },
         { title: 'Model', dataIndex: 'model', key: 'model' },
         { title: 'Warranty Expiry', dataIndex: 'warrantyInfo', key: 'warrantyInfo', render: (date) => {
@@ -195,7 +200,6 @@ const MasterView = ({ user, setExpiringItems }) => {
         if (!selectedEquipment) return null;
         return (
             <div>
-                <p><strong>Asset ID:</strong> {selectedEquipment.assetId}</p>
                 <p><strong>Category:</strong> {selectedEquipment.category}</p>
                 <p><strong>Model:</strong> {selectedEquipment.model}</p>
                 <p><strong>Serial Number:</strong> {selectedEquipment.serialNumber}</p>
@@ -228,7 +232,6 @@ const MasterView = ({ user, setExpiringItems }) => {
             <Modal title="Edit Equipment" open={isEditModalOpen} onOk={handleEditSave} onCancel={handleEditCancel} width={800}>
                 <Form form={form} layout="vertical">
                     <Row gutter={16}>
-                        <Col span={12}><Form.Item name="assetId" label="Asset ID"><Input disabled /></Form.Item></Col>
                         <Col span={12}><Form.Item name="category" label="Category"><Input /></Form.Item></Col>
                         <Col span={12}><Form.Item name="model" label="Model"><Input /></Form.Item></Col>
                         <Col span={12}><Form.Item name="serialNumber" label="Serial Number"><Input /></Form.Item></Col>

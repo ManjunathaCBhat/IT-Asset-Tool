@@ -33,17 +33,12 @@ const Logo = ({ collapsed }) => {
 
     return (
         <div style={logoStyle}>
-            {collapsed ? (
-                <>
-                    <span style={cirrusStyle}>c</span>
-                    <span style={labsStyle}>l</span>
-                </>
-            ) : (
-                <>
+           
+                
                     <span style={cirrusStyle}>cirrus</span>
                     <span style={labsStyle}>labs</span>
-                </>
-            )}
+                
+            
         </div>
     );
 };
@@ -149,7 +144,7 @@ const App = () => {
     return (
         <Router>
             <Layout style={{ minHeight: '100vh' }}>
-                <Sider collapsed={collapsed} onMouseEnter={() => setCollapsed(false)} onMouseLeave={() => setCollapsed(true)}>
+                <Sider  >
                     {/* The placeholder div is now replaced with the new Logo component */}
                     <Logo collapsed={collapsed} />
                     <Menu theme="dark" defaultSelectedKeys={['1']} mode="inline" items={menuItems} />

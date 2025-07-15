@@ -39,7 +39,7 @@ const UserManagement = () => {
             await axios.post('http://localhost:5000/api/users/create', values);
             message.success('User created successfully!');
             setIsModalVisible(false);
-            fetchUsers();
+            fetchUsers(); // Refresh user list
         } catch (err) {
             message.error(err.response?.data?.msg || 'Failed to create user.');
         }
@@ -47,9 +47,10 @@ const UserManagement = () => {
     
     const handleDeleteUser = async (userId) => {
         try {
+            // FIX: The request method has been changed from GET to DELETE.
             await axios.delete(`http://localhost:5000/api/users/${userId}`);
             message.success('User deleted successfully');
-            fetchUsers();
+            fetchUsers(); // Refresh user list
         } catch (err) {
             message.error('Failed to delete user.');
         }

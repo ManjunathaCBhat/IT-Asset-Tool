@@ -6,26 +6,26 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const { mongo_uri, jwt_secret } = process.env;
-
+ 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
+ 
 // --- Middleware ---
 app.use(cors());
 app.use(express.json());
-
+ 
 // --- Database Connection ---
 const MONGO_URI = process.env.mongo_uri ;
 // --- JWT Secret ---
 const JWT_SECRET = process.env.jwt_secret;
-
+ 
 // --- Mongoose Schemas ---
 const UserSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     role: { type: String, enum: ['Admin', 'Editor', 'Viewer'], default: 'Viewer' }
 });
-
+ 
 const EquipmentSchema = new mongoose.Schema({
     assetId: { type: String, required: true, unique: true },
     category: { type: String, required: true },
@@ -47,10 +47,10 @@ const EquipmentSchema = new mongoose.Schema({
         default: false
     }
 }, { timestamps: true });
-
+ 
 const User = mongoose.model('User', UserSchema);
 const Equipment = mongoose.model('Equipment', EquipmentSchema);
-
+ 
 // --- Function to Seed First Admin User ---
 const seedAdminUser = async () => {
     const ADMIN_EMAIL = 'admin@example.com';
@@ -74,7 +74,7 @@ const seedAdminUser = async () => {
         console.error('Error seeding admin user:', error);
     }
 };
-
+ 
 // --- Connect to DB and Seed Admin ---
 mongoose.connect(MONGO_URI)
     .then(() => {
@@ -82,8 +82,8 @@ mongoose.connect(MONGO_URI)
         seedAdminUser();
     })
     .catch(err => console.error('MongoDB connection error:', err));
-
-
+ 
+ 
 // --- Authentication & Role Middleware ---
 const auth = (req, res, next) => {
     const token = req.header('x-auth-token');
@@ -102,9 +102,9 @@ const requireRole = (roles) => (req, res, next) => {
     }
     next();
 };
-
+ 
 // --- API Endpoints ---
-
+ 
 // --- User Endpoints ---
 app.post('/api/users/login', async (req, res) => {
     const { email, password } = req.body;
@@ -114,7 +114,7 @@ app.post('/api/users/login', async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ msg: 'Invalid credentials' });
         const payload = { user: { id: user.id, role: user.role, email: user.email } };
-        jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' }, (err, token) => {
+        jwt.sign(payload, JWT_SECRET, { expiresIn: '2h' }, (err, token) => {
             if (err) throw err;
             res.json({ token, user: payload.user });
         });
@@ -144,10 +144,10 @@ app.delete('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) =>
         res.json({ msg: 'User deleted' });
     } catch (err) { res.status(500).send('Server Error'); }
 });
-
-
+ 
+ 
 // --- Equipment Endpoints ---
-
+ 
 // GET all equipment (that is NOT soft-deleted)
 app.get('/api/equipment', auth, async (req, res) => {
     try {
@@ -157,7 +157,7 @@ app.get('/api/equipment', auth, async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
-
+ 
 app.post('/api/equipment', [auth, requireRole(['Admin', 'Editor'])], async (req, res) => {
     const newEquipment = new Equipment(req.body);
     try {
@@ -175,7 +175,7 @@ app.post('/api/equipment', [auth, requireRole(['Admin', 'Editor'])], async (req,
         res.status(500).json({ message: 'Server error while creating equipment.' });
     }
 });
-
+ 
 app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (req, res) => {
     try {
         const updatedEquipment = await Equipment.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -184,7 +184,7 @@ app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (r
         res.status(400).json({ message: err.message });
     }
 });
-
+ 
 // SOFT DELETE an asset (Admin only)
 app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res) => {
     try {
@@ -202,5 +202,19 @@ app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res
     }
 });
 
+// Get equipment count by category (excluding soft-deleted)
+app.get('/api/equipment/count/:category', auth, async (req, res) => {
+    try {
+        const count = await Equipment.countDocuments({
+            category: req.params.category,
+        });
+        res.json({ count });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
 
+
+ 
+ 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
