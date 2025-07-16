@@ -7,7 +7,8 @@ import {
 import {
     PlusOutlined, DatabaseOutlined, BellOutlined, UserOutlined,
     LogoutOutlined, TeamOutlined, CheckCircleOutlined, ToolOutlined, // <-- Add this comma
-    WarningOutlined // <-- Add WarningOutlined here
+    WarningOutlined, // <-- Add WarningOutlined here
+    DeleteOutlined
 } from '@ant-design/icons'; // <-- Make sure this line is correct
 import moment from 'moment';
 
@@ -58,6 +59,7 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
         { key: '/in-use', icon: <ToolOutlined />, label: <Link to="/in-use">In Use</Link> },
         // Damaged Products menu item
         { key: '/DamagedProducts', icon: <WarningOutlined />, label: <Link to="/DamagedProducts">Damaged Products</Link> },
+        { key: '/e-waste', icon: <DeleteOutlined />, label: <Link to="/e-waste">E-Waste</Link> },
     ];
 
     if (user?.role === 'Admin' || user?.role === 'Editor') {
