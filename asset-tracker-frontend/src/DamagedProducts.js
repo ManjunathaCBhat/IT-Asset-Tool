@@ -1,10 +1,9 @@
 import React from 'react';
 import { Tag, Typography } from 'antd';
-// No need for moment or axios imports here, PageShell should handle that
-// No need for useState or useEffect for data fetching, PageShell handles it
+import moment from 'moment'; // Import moment for date formatting
 import PageShell from './PageShell'; // Import the reusable component
 
-const { Text } = Typography; // Import Text for consistency if PageShell doesn't provide it directly in columns render
+const { Text } = Typography;
 
 // Helper function to get status tag color (reused from MasterView/InUse)
 const getStatusColor = (status) => {
@@ -13,61 +12,53 @@ const getStatusColor = (status) => {
 };
 
 const DamagedProducts = ({ user }) => {
-    // Define the columns specific to the Damaged Products view
     const damagedProductColumns = [
-        // 'SL No' will be automatically added by PageShell if it includes it
         {
             title: 'Category',
             dataIndex: 'category',
             key: 'category',
             sorter: (a, b) => a.category.localeCompare(b.category),
+            width: 150,
         },
         {
             title: 'Model',
             dataIndex: 'model',
             key: 'model',
+            width: 180,
         },
         {
             title: 'Serial Number',
             dataIndex: 'serialNumber',
             key: 'serialNumber',
+            width: 150,
+        },
+        // --- NEW COLUMN: Damage Date ---
+        {
+            title: 'Damage Date', // Column title
+            dataIndex: 'updatedAt', // Assuming 'updatedAt' stores the last modification date, which is when status changed to 'Damaged'
+            key: 'damageDate',
+            render: (date) => date ? moment(date).format('DD MMM YYYY') : 'N/A', // Format the date nicely
+            sorter: (a, b) => moment(a.updatedAt).unix() - moment(b.updatedAt).unix(), // Enable sorting
+            width: 120,
         },
         {
-            title: 'Comments', // This was 'comment' in your previous DamagedProducts, ensure it matches your API
+            title: 'Comments',
             dataIndex: 'comment',
             key: 'comment',
-            ellipsis: true, // Useful for potentially long comments
+            ellipsis: true,
+            width: 250,
         },
-        {
-            title: 'Status',
-            dataIndex: 'status',
-            key: 'status',
-            render: (status) => (
-                // Although all items should be 'Damaged', using getStatusColor provides consistency
-                <Tag color={getStatusColor(status)}>
-                    {status ? status.toUpperCase() : 'N/A'}
-                </Tag>
-            ),
-            sorter: (a, b) => a.status.localeCompare(b.status),
-        },
-        // If your damaged items have 'movedBy' and you want to display it:
-        // {
-        //     title: 'Moved By',
-        //     dataIndex: 'movedBy',
-        //     key: 'movedBy',
-        // },
+        // The 'Status' column is intentionally removed as per your previous request
     ];
 
     return (
         <PageShell
             pageTitle="Damaged Products"
-            apiEndpoint="http://localhost:5000/api/equipment" // Assuming this endpoint can be filtered
+            apiEndpoint="http://localhost:5000/api/equipment"
             tableColumns={damagedProductColumns}
             user={user}
-            initialFilters={{ status: 'Damaged' }} // <-- This is the key: filter for 'Damaged' status
-            hideFilters={['status']} // Hide the status filter as it's pre-selected
-            // You can also pass a custom function for handling item actions if needed,
-            // otherwise PageShell's default actions will apply.
+            initialFilters={{ status: 'Damaged' }}
+            hideFilters={['status', 'warrantyInfo']} // Still hide status and warrantyInfo filters
         />
     );
 };
