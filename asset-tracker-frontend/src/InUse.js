@@ -28,6 +28,11 @@ const renderWarrantyTag = (date) => {
 const InUse = ({ user }) => {
     // Define the columns specific to the In-Use view
     const inUseColumns = [
+        {
+            title: 'Category',
+            dataIndex: 'category',
+            key: 'category',
+        },
         { title: 'Model', dataIndex: 'model', key: 'model' },
         { title: 'Assignee', dataIndex: 'assigneeName', key: 'assigneeName' },
         { title: 'Position', dataIndex: 'position', key: 'position' },

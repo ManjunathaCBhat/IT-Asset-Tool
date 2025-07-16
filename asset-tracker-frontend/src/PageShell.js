@@ -2,10 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import {
     Table, Button, Modal, Tag, message, Card, Dropdown,
-    Typography, Space, Popconfirm, Input, Form, Row, Col,
+    Typography, Space, Input, Form, Row, Col,
     Select, DatePicker, Popover, Badge
 } from 'antd';
-import { EyeOutlined, EditOutlined, DeleteOutlined, MoreOutlined, FilterOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, DeleteOutlined, MoreOutlined, FilterOutlined, ExclamationCircleFilled } from '@ant-design/icons';
 import moment from 'moment';
 
 const { Title, Text } = Typography;
@@ -57,7 +57,8 @@ const PageShell = ({
     user,
     setExpiringItems,
     initialFilters = EMPTY_OBJECT,
-    hideFilters = EMPTY_ARRAY
+    hideFilters = EMPTY_ARRAY,
+    renderCustomActions,
 }) => {
     // --- State Management ---
     const [allData, setAllData] = useState([]);
@@ -69,18 +70,22 @@ const PageShell = ({
     const [searchText, setSearchText] = useState('');
     const [userFilters, setUserFilters] = useState({});
     const [popoverVisible, setPopoverVisible] = useState(false);
-    
-    // --- EDIT 1: Add state to manage pagination ---
     const [pagination, setPagination] = useState({
         current: 1,
         pageSize: 10,
         showSizeChanger: true,
     });
+    const [currentEditStatus, setCurrentEditStatus] = useState(null);
+    
+    // --- EDIT 1: State for the custom delete modal ---
+    const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+    const [itemToDelete, setItemToDelete] = useState(null);
+
 
     const [editForm] = Form.useForm();
     const [filterForm] = Form.useForm();
 
-    // --- Data Fetching (unchanged) ---
+    // --- Data Fetching ---
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
@@ -110,7 +115,7 @@ const PageShell = ({
     }, [fetchData]);
 
 
-    // --- Filtering Logic (unchanged) ---
+    // --- Filtering Logic ---
     useEffect(() => {
         let data = [...allData];
         const combinedFilters = { ...initialFilters, ...userFilters };
@@ -143,19 +148,23 @@ const PageShell = ({
     }, [searchText, userFilters, allData, initialFilters]);
 
 
-    // --- Modal and Action Handlers (unchanged) ---
-    const handleDelete = async (id) => {
+    // --- Modal and Action Handlers ---
+    const handleDelete = async () => {
         try {
-            await axios.delete(`http://localhost:5000/api/equipment/${id}`, { headers: getAuthHeader() });
-            message.success('Equipment deleted successfully');
+            await axios.delete(`http://localhost:5000/api/equipment/${itemToDelete._id}`, { headers: getAuthHeader() });
+            message.success(`Successfully deleted: ${itemToDelete.model}`);
             fetchData();
         } catch (error) {
             message.error('Failed to delete equipment.');
+        } finally {
+            setIsDeleteModalVisible(false);
+            setItemToDelete(null);
         }
     };
 
     const handleEditClick = (record) => {
         setSelectedItem(record);
+        setCurrentEditStatus(record.status);
         const formData = {
             ...record,
             warrantyInfo: record.warrantyInfo ? moment(record.warrantyInfo, 'YYYY-MM-DD') : null
@@ -185,18 +194,22 @@ const PageShell = ({
         setIsDetailsModalOpen(true);
     };
 
-    // --- EDIT 2: Add a handler for table changes (pagination, sorting, filtering) ---
+    // --- EDIT 2: Functions to show and hide the new delete modal ---
+    const showDeleteModal = (item) => {
+        setItemToDelete(item);
+        setIsDeleteModalVisible(true);
+    };
+
     const handleTableChange = (paginationConfig) => {
         setPagination(paginationConfig);
     };
 
-    // --- EDIT 3: Dynamically create the SI No. and Action columns ---
+    // --- Dynamic Columns ---
     const siNoColumn = {
         title: 'SI No',
         key: 'siNo',
         width: 80,
         render: (text, record, index) => {
-            // Calculate the correct serial number based on page and page size
             return (pagination.current - 1) * pagination.pageSize + index + 1;
         },
     };
@@ -206,49 +219,50 @@ const PageShell = ({
         key: 'action',
         align: 'center',
         width: 120,
-        render: (_, record) => {
-            const menuItems = [{
-                key: '1',
-                label: 'View Details',
-                icon: <EyeOutlined />,
-                onClick: () => showDetailsModal(record)
-            }];
+        render: renderCustomActions
+            ? (_, record) => renderCustomActions(record, fetchData)
+            : (_, record) => {
+                const menuItems = [
+                    {
+                        key: '1',
+                        label: 'View Details',
+                        icon: <EyeOutlined />,
+                        onClick: () => showDetailsModal(record)
+                    }
+                ];
 
-            if (user.role === 'Admin' || user.role === 'Editor') {
-                menuItems.push({
-                    key: '2',
-                    label: 'Edit',
-                    icon: <EditOutlined />,
-                    onClick: () => handleEditClick(record)
-                });
-            }
+                if (user.role === 'Admin' || user.role === 'Editor') {
+                    menuItems.push({
+                        key: '2',
+                        label: 'Edit',
+                        icon: <EditOutlined />,
+                        onClick: () => handleEditClick(record)
+                    });
+                }
 
-            return (
-                <Space>
+                // --- EDIT 3: The delete button now calls showDeleteModal ---
+                if (user.role === 'Admin') {
+                    menuItems.push({
+                        key: '3',
+                        danger: true,
+                        icon: <DeleteOutlined />,
+                        label: 'Delete',
+                        onClick: () => showDeleteModal(record), // Replaced Popconfirm
+                    });
+                }
+
+                return (
                     <Dropdown menu={{ items: menuItems }} trigger={['click']}>
                         <Button type="text" icon={<MoreOutlined style={{ fontSize: '20px' }} />} />
                     </Dropdown>
-                    {user.role === 'Admin' && (
-                        <Popconfirm
-                            title="Delete this asset?"
-                            onConfirm={() => handleDelete(record._id)}
-                            okText="Yes"
-                            cancelText="No"
-                            placement="topRight"
-                        >
-                            <Button type="text" danger icon={<DeleteOutlined />} />
-                        </Popconfirm>
-                    )}
-                </Space>
-            );
-        },
+                );
+            },
     };
-    
-    // Combine the dynamic SI No, the columns from props, and the dynamic Action column
+
     const finalColumns = [siNoColumn, ...tableColumns, actionColumn];
 
 
-    // --- Filter Popover Content (unchanged) ---
+    // --- Filter Popover Content ---
     const handleApplyFilters = (values) => {
         setUserFilters(values);
         setPopoverVisible(false);
@@ -295,7 +309,7 @@ const PageShell = ({
     );
 
 
-    // --- Modal Content Renderers (unchanged) ---
+    // --- Modal Content Renderers ---
     const renderDetailsModalContent = () => {
         if (!selectedItem) return null;
         return (
@@ -347,7 +361,6 @@ const PageShell = ({
                     dataSource={filteredData}
                     rowKey="_id"
                     loading={loading}
-                    // --- EDIT 4: Control the pagination and listen for changes ---
                     pagination={pagination}
                     onChange={handleTableChange}
                 />
@@ -363,14 +376,24 @@ const PageShell = ({
             </Modal>
 
             <Modal
-                title="Edit Equipment"
+                title={`Edit: ${selectedItem?.model || 'Equipment'}`}
                 open={isEditModalOpen}
                 onOk={handleEditSave}
                 onCancel={() => setIsEditModalOpen(false)}
                 width={800}
                 destroyOnClose
             >
-                <Form form={editForm} layout="vertical" name="edit_form">
+                <Form
+                    form={editForm}
+                    layout="vertical"
+                    name="edit_form"
+                    onValuesChange={(changedValues) => {
+                        if (changedValues.status) {
+                            setCurrentEditStatus(changedValues.status);
+                        }
+                    }}
+                >
+                    <Title level={5} style={{ marginBottom: 16 }}>Core Information</Title>
                      <Row gutter={16}>
                         <Col span={12}><Form.Item name="category" label="Category" rules={[{ required: true }]}><Input /></Form.Item></Col>
                         <Col span={12}><Form.Item name="model" label="Model"><Input /></Form.Item></Col>
@@ -379,19 +402,58 @@ const PageShell = ({
                         <Col span={12}><Form.Item name="warrantyInfo" label="Warranty Expiry Date"><DatePicker style={{ width: '100%' }} /></Form.Item></Col>
                         <Col span={12}><Form.Item name="status" label="Status" rules={[{ required: true }]}><Select><Option value="In Stock">In Stock</Option><Option value="In Use">In Use</Option><Option value="Damaged">Damaged</Option><Option value="E-Waste">E-Waste</Option></Select></Form.Item></Col>
                     </Row>
-                    <Title level={5}>Assignee Details</Title>
-                    <Row gutter={16}>
-                        <Col span={12}><Form.Item name="assigneeName" label="Assignee Name"><Input /></Form.Item></Col>
-                        <Col span={12}><Form.Item name="position" label="Position"><Input /></Form.Item></Col>
-                        <Col span={12}><Form.Item name="employeeEmail" label="Employee Email"><Input /></Form.Item></Col>
-                        <Col span={12}><Form.Item name="phoneNumber" label="Phone Number"><Input /></Form.Item></Col>
-                    </Row>
+
+                    {currentEditStatus === 'In Use' && (
+                        <>
+                            <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>Assignee Details</Title>
+                            <Row gutter={16}>
+                                <Col span={12}><Form.Item name="assigneeName" label="Assignee Name"><Input /></Form.Item></Col>
+                                <Col span={12}><Form.Item name="position" label="Position"><Input /></Form.Item></Col>
+                                <Col span={12}><Form.Item name="employeeEmail" label="Employee Email"><Input /></Form.Item></Col>
+                                <Col span={12}><Form.Item name="phoneNumber" label="Phone Number"><Input /></Form.Item></Col>
+                            </Row>
+                        </>
+                    )}
+
+                    {currentEditStatus === 'Damaged' && (
+                         <>
+                            <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>Damage Information</Title>
+                            <Form.Item name="damageDescription" label="Damage Description">
+                                <Input.TextArea rows={4} />
+                            </Form.Item>
+                        </>
+                    )}
+
+                    <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>Additional Details</Title>
                     <Form.Item name="comment" label="Comment"><Input.TextArea rows={4} /></Form.Item>
                 </Form>
+            </Modal>
+            
+            {/* --- EDIT 4: Add the new custom delete modal --- */}
+            <Modal
+                title={
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <ExclamationCircleFilled style={{ color: '#faad14', marginRight: 16, fontSize: 22 }} />
+                        <span>Confirm Deletion</span>
+                    </div>
+                }
+                open={isDeleteModalVisible}
+                onCancel={() => setIsDeleteModalVisible(false)}
+                footer={[
+                    <Button key="back" onClick={() => setIsDeleteModalVisible(false)}>
+                        Cancel
+                    </Button>,
+                    <Button key="submit" type="primary" danger onClick={handleDelete}>
+                        Delete
+                    </Button>,
+                ]}
+                centered // This centers the modal on the screen
+            >
+                <p>Are you sure you want to delete the asset: <strong>{itemToDelete?.model}</strong>?</p>
+                <p>This action cannot be undone.</p>
             </Modal>
         </>
     );
 };
 
 export default PageShell;
-
