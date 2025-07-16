@@ -11,6 +11,7 @@ import AddEquipment from './AddEquipment';
 import UserManagement from './UserManagement';
 import InStockView from './InStockView';
 import InUse from './InUse';
+import DamagedProducts from './DamagedProducts';
 
 const App = () => {
     const [user, setUser] = useState(null);
@@ -70,6 +71,8 @@ const App = () => {
                         <Route index element={<MasterView user={user} setExpiringItems={setExpiringItems} />} />
                         <Route path="in-stock" element={<InStockView user={user} />} />
                         <Route path="in-use" element={<InUse user={user} />} />
+                        <Route path="DamagedProducts" element={<DamagedProducts user={user} />} />
+
 
                         <Route
                             path="add"

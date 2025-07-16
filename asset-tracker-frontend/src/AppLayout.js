@@ -6,8 +6,9 @@ import {
 } from 'antd';
 import {
     PlusOutlined, DatabaseOutlined, BellOutlined, UserOutlined,
-    LogoutOutlined, TeamOutlined, CheckCircleOutlined, ToolOutlined
-} from '@ant-design/icons';
+    LogoutOutlined, TeamOutlined, CheckCircleOutlined, ToolOutlined, // <-- Add this comma
+    WarningOutlined // <-- Add WarningOutlined here
+} from '@ant-design/icons'; // <-- Make sure this line is correct
 import moment from 'moment';
 
 const { Header, Content, Sider } = Layout;
@@ -55,7 +56,10 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
         { key: '/', icon: <DatabaseOutlined />, label: <Link to="/">Asset Inventory</Link> },
         { key: '/in-stock', icon: <CheckCircleOutlined />, label: <Link to="/in-stock">In Stock</Link> },
         { key: '/in-use', icon: <ToolOutlined />, label: <Link to="/in-use">In Use</Link> },
+        // Damaged Products menu item
+        { key: '/DamagedProducts', icon: <WarningOutlined />, label: <Link to="/DamagedProducts">Damaged Products</Link> },
     ];
+
     if (user?.role === 'Admin' || user?.role === 'Editor') {
         menuItems.push({ key: '/add', icon: <PlusOutlined />, label: <Link to="/add">Add Equipment</Link> });
     }
@@ -145,9 +149,9 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
                     </Dropdown>
                 </Header>
                 <Content style={{ margin: '24px 16px', overflow: 'initial' }}>
-                     <div style={{ padding: 24, background: '#fff' }}>
+                   <div style={{ padding: 24, background: '#fff' }}>
                         <Outlet />
-                     </div>
+                   </div>
                 </Content>
             </Layout>
         </Layout>
