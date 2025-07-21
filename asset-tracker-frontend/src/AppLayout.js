@@ -6,10 +6,10 @@ import {
 } from 'antd';
 import {
     PlusOutlined, DatabaseOutlined, BellOutlined, UserOutlined,
-    LogoutOutlined, TeamOutlined, CheckCircleOutlined, ToolOutlined, // <-- Add this comma
-    WarningOutlined, // <-- Add WarningOutlined here
+    LogoutOutlined, TeamOutlined, CheckCircleOutlined, ToolOutlined,
+    WarningOutlined,
     DeleteOutlined
-} from '@ant-design/icons'; // <-- Make sure this line is correct
+} from '@ant-design/icons';
 import moment from 'moment';
 
 const { Header, Content, Sider } = Layout;
@@ -53,12 +53,12 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
     const location = useLocation();
 
     // Define menu items based on user role
-    const menuItems = [
-        { key: '/', icon: <DatabaseOutlined />, label: <Link to="/">Asset Inventory</Link> },
+      const menuItems = [
+        { key: '/', icon: <DatabaseOutlined />, label: <Link to="/">Dashboard</Link> }, // <--- NEW DASHBOARD LINK
+        { key: '/all-assets', icon: <DatabaseOutlined />, label: <Link to="/all-assets">All Assets</Link> }, // <--- UPDATED PATH FOR MASTER VIEW
         { key: '/in-stock', icon: <CheckCircleOutlined />, label: <Link to="/in-stock">In Stock</Link> },
         { key: '/in-use', icon: <ToolOutlined />, label: <Link to="/in-use">In Use</Link> },
-        // Damaged Products menu item
-        { key: '/DamagedProducts', icon: <WarningOutlined />, label: <Link to="/DamagedProducts">Damaged Products</Link> },
+        { key: '/damaged', icon: <WarningOutlined />, label: <Link to="/damaged">Damaged Products</Link> },
         { key: '/e-waste', icon: <DeleteOutlined />, label: <Link to="/e-waste">E-Waste</Link> },
     ];
 
@@ -146,9 +146,9 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
                             <BellOutlined style={{ fontSize: '20px', cursor: 'pointer' }} />
                         </Badge>
                     </Popover>
-                    <Dropdown overlay={userMenu} placement="bottomRight">
-                        <Avatar style={{ backgroundColor: '#1890ff', cursor: 'pointer' }} icon={<UserOutlined />} />
-                    </Dropdown>
+<Dropdown menu={{ items: userMenu.props.children.map(child => child.key === 'divider' ? { type: 'divider', key: 'divider' } : { key: child.key, label: child.props.children, icon: child.props.icon, disabled: child.props.disabled, onClick: child.props.onClick }) }} placement="bottomRight">
+    <Avatar style={{ backgroundColor: '#1890ff', cursor: 'pointer' }} icon={<UserOutlined />} />
+</Dropdown>
                 </Header>
                 <Content style={{ margin: '24px 16px', overflow: 'initial' }}>
                    <div style={{ padding: 24, background: '#fff' }}>

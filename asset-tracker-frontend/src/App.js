@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Spin, message } from 'antd'; // Make sure message is imported for logout feedback
+import { Spin, message } from 'antd';
 import axios from 'axios';
 
 // --- Component and Layout Imports ---
 import AppLayout from './AppLayout';
 import LoginPage from './LoginPage';
+import Dashboard from './Dashboard'; // <--- IMPORT THE NEW DASHBOARD COMPONENT
 import MasterView from './MasterView';
 import AddEquipment from './AddEquipment';
 import UserManagement from './UserManagement';
@@ -13,7 +14,7 @@ import InStockView from './InStockView';
 import InUse from './InUse';
 import DamagedProducts from './DamagedProducts';
 import EWaste from './EWaste';
-import WelcomePage from './WelcomePage'; // <--- IMPORT THE WELCOMEPAGE COMPONENT
+import WelcomePage from './WelcomePage';
 
 const App = () => {
     const [user, setUser] = useState(null);
@@ -26,8 +27,24 @@ const App = () => {
         localStorage.removeItem('user');
         setUser(null);
         delete axios.defaults.headers.common['x-auth-token'];
-        message.info('Logged out successfully!'); // Added message feedback
+        message.info('Logged out successfully!');
     };
+
+    // --- Fetch expiring items (placed here to be available for AppLayout header) ---
+    const fetchExpiringItems = async (token) => {
+        if (!token) return;
+        try {
+            // Adjust this API endpoint if your backend provides a specific one for expiring items
+            const response = await axios.get('http://localhost:5000/api/equipment/expiring-warranty', {
+                headers: { 'x-auth-token': token }
+            });
+            setExpiringItems(response.data);
+        } catch (error) {
+            console.error('Error fetching expiring items:', error);
+            // Optionally show a message to the user
+        }
+    };
+
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -37,10 +54,11 @@ const App = () => {
                 const parsedUser = JSON.parse(userData);
                 setUser(parsedUser);
                 axios.defaults.headers.common['x-auth-token'] = token;
+                fetchExpiringItems(token); // Fetch expiring items on initial load if user is logged in
             } catch (e) {
                 console.error("Failed to parse user from localStorage", e);
-                localStorage.removeItem('user'); // Clear corrupted data
-                localStorage.removeItem('token'); // Clear token if user data is bad
+                localStorage.removeItem('user');
+                localStorage.removeItem('token');
             }
         }
         setLoading(false);
@@ -51,8 +69,7 @@ const App = () => {
         localStorage.setItem('user', JSON.stringify(data.user));
         setUser(data.user);
         axios.defaults.headers.common['x-auth-token'] = data.token;
-        // No explicit redirect needed here, as updating 'user' state handles the switch
-        // to the authenticated routes, which includes the default '/' route to MasterView.
+        fetchExpiringItems(data.token); // Fetch expiring items after successful login
     };
 
     // --- Render Logic ---
@@ -67,11 +84,8 @@ const App = () => {
                 {!user ? (
                     // --- Routes for UN-AUTHENTICATED users ---
                     <>
-                        {/* Default route for non-logged-in users is the WelcomePage */}
                         <Route path="/" element={<WelcomePage />} />
-                        {/* Explicit route for the LoginPage, accessible from the WelcomePage */}
                         <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
-                        {/* Catch-all for any other unmatched path for unauthenticated users, redirects to WelcomePage */}
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </>
                 ) : (
@@ -86,11 +100,11 @@ const App = () => {
                             />
                         }
                     >
-                        {/* Dashboard child routes (rendered within AppLayout's <Outlet>) */}
-                        <Route index element={<MasterView user={user} setExpiringItems={setExpiringItems} />} />
+                        {/* Dashboard is now the default child route for authenticated users */}
+                        <Route index element={<Dashboard />} /> {/* <--- NEW: Dashboard as index route */}
+                        <Route path="all-assets" element={<MasterView user={user} setExpiringItems={setExpiringItems} />} /> {/* <--- CHANGED PATH from / to /all-assets */}
                         <Route path="in-stock" element={<InStockView user={user} />} />
                         <Route path="in-use" element={<InUse user={user} />} />
-                        {/* Corrected path names as discussed previously */}
                         <Route path="damaged" element={<DamagedProducts user={user} />} />
                         <Route path="e-waste" element={<EWaste user={user} />} />
                         <Route
@@ -98,7 +112,7 @@ const App = () => {
                             element={
                                 (user.role === 'Admin' || user.role === 'Editor')
                                 ? <AddEquipment />
-                                : <Navigate to="/" /> // Redirect if not authorized
+                                : <Navigate to="/" />
                             }
                         />
                         <Route
@@ -106,11 +120,11 @@ const App = () => {
                             element={
                                 user.role === 'Admin'
                                 ? <UserManagement user={user} />
-                                : <Navigate to="/" /> // Redirect if not authorized
+                                : <Navigate to="/" />
                             }
                         />
 
-                        {/* A catch-all route for authenticated users: redirects any unknown paths to the dashboard homepage */}
+                        {/* Fallback to Dashboard for any unknown paths for authenticated users */}
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
                 )}

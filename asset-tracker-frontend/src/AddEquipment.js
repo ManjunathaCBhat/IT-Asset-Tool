@@ -48,6 +48,7 @@ const AddEquipment = () => {
                 assetId: assetId,
                 category: categoryToUse,
                 warrantyInfo: values.warrantyInfo ? values.warrantyInfo.format('YYYY-MM-DD') : null,
+                purchasePrice: values.purchasePrice ? parseFloat(values.purchasePrice) : 0, // Ensure purchasePrice is a number
             };
 
             // Remove the temporary customCategory field if it exists
@@ -55,7 +56,7 @@ const AddEquipment = () => {
 
             await axios.post('http://localhost:5000/api/equipment', finalValues, { headers: getAuthHeader() });
             message.success('Equipment added successfully!');
-            navigate('/'); // Redirect to the main inventory page
+            navigate('/all-assets'); // <--- CHANGED THIS LINE TO REDIRECT TO /all-assets
         } catch (error) {
             console.error("Error adding equipment:", error);
             message.error(error.response?.data?.message || 'Failed to add equipment.');
@@ -139,6 +140,19 @@ const AddEquipment = () => {
                                         <Option value="Damaged">Damaged</Option>
                                         <Option value="E-Waste">E-Waste</Option>
                                     </Select>
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={12}> {/* Added purchasePrice input field */}
+                                <Form.Item
+                                    name="purchasePrice"
+                                    label="Purchase Price (INR)"
+                                    rules={[{
+                                        type: 'number',
+                                        transform: (value) => parseFloat(value),
+                                        message: 'Please enter a valid number',
+                                    }]}
+                                >
+                                    <Input type="number" step="0.01" placeholder="e.g., 25000.00" />
                                 </Form.Item>
                             </Col>
                         </Row>

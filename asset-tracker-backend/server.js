@@ -5,35 +5,34 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
-const { mongo_uri, jwt_secret } = process.env;
- 
+const moment = require('moment'); // Import moment for date calculations
+
 const app = express();
 const PORT = process.env.PORT || 5000;
- 
+
 // --- Middleware ---
 app.use(cors());
 app.use(express.json());
- 
+
 // --- Database Connection ---
-const MONGO_URI = process.env.mongo_uri ;
+const MONGO_URI = process.env.mongo_uri;
 // --- JWT Secret ---
 const JWT_SECRET = process.env.jwt_secret;
- 
+
 // --- Mongoose Schemas ---
 const UserSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     role: { type: String, enum: ['Admin', 'Editor', 'Viewer'], default: 'Viewer' }
 });
- 
+
 const EquipmentSchema = new mongoose.Schema({
     assetId: { type: String, required: true, unique: true },
     category: { type: String, required: true },
-    // FIX: Re-added the enum validation for the status field.
     status: { type: String, required: true, enum: ['In Use', 'In Stock', 'Damaged', 'E-Waste'] },
     model: { type: String },
     serialNumber: { type: String },
-    warrantyInfo: { type: String },
+    warrantyInfo: { type: String }, // Assuming this is a date string or Date object
     location: { type: String },
     comment: { type: String },
     assigneeName: { type: String },
@@ -42,15 +41,16 @@ const EquipmentSchema = new mongoose.Schema({
     phoneNumber: { type: String },
     department: { type: String },
     damageDescription: { type: String },
+    purchasePrice: { type: Number, default: 0 }, // Added purchasePrice for total value calculation
     isDeleted: {
         type: Boolean,
         default: false
     }
 }, { timestamps: true });
- 
+
 const User = mongoose.model('User', UserSchema);
 const Equipment = mongoose.model('Equipment', EquipmentSchema);
- 
+
 // --- Function to Seed First Admin User ---
 const seedAdminUser = async () => {
     const ADMIN_EMAIL = 'admin@example.com';
@@ -74,7 +74,7 @@ const seedAdminUser = async () => {
         console.error('Error seeding admin user:', error);
     }
 };
- 
+
 // --- Connect to DB and Seed Admin ---
 mongoose.connect(MONGO_URI)
     .then(() => {
@@ -82,8 +82,8 @@ mongoose.connect(MONGO_URI)
         seedAdminUser();
     })
     .catch(err => console.error('MongoDB connection error:', err));
- 
- 
+
+
 // --- Authentication & Role Middleware ---
 const auth = (req, res, next) => {
     const token = req.header('x-auth-token');
@@ -102,9 +102,9 @@ const requireRole = (roles) => (req, res, next) => {
     }
     next();
 };
- 
+
 // --- API Endpoints ---
- 
+
 // --- User Endpoints ---
 app.post('/api/users/login', async (req, res) => {
     const { email, password } = req.body;
@@ -144,10 +144,10 @@ app.delete('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) =>
         res.json({ msg: 'User deleted' });
     } catch (err) { res.status(500).send('Server Error'); }
 });
- 
- 
+
+
 // --- Equipment Endpoints ---
- 
+
 // GET all equipment (that is NOT soft-deleted)
 app.get('/api/equipment', auth, async (req, res) => {
     try {
@@ -157,25 +157,22 @@ app.get('/api/equipment', auth, async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
- 
+
 app.post('/api/equipment', [auth, requireRole(['Admin', 'Editor'])], async (req, res) => {
     const newEquipment = new Equipment(req.body);
     try {
         const savedEquipment = await newEquipment.save();
         res.status(201).json(savedEquipment);
     } catch (err) {
-        // FIX: Improved error handling to be more specific.
-        if (err.name === 'ValidationError') {
-            // Extracts the specific validation error messages from Mongoose.
-            const messages = Object.values(err.errors).map(val => val.message);
-            return res.status(400).json({ message: messages.join('. ') });
-        }
-        // Log other unexpected errors for debugging.
-        console.error(err);
-        res.status(500).json({ message: 'Server error while creating equipment.' });
+            if (err.name === 'ValidationError') {
+                const messages = Object.values(err.errors).map(val => val.message);
+                return res.status(400).json({ message: messages.join('. ') });
+            }
+            console.error(err);
+            res.status(500).json({ message: 'Server error while creating equipment.' });
     }
 });
- 
+
 app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (req, res) => {
     try {
         const updatedEquipment = await Equipment.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -184,7 +181,7 @@ app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (r
         res.status(400).json({ message: err.message });
     }
 });
- 
+
 // SOFT DELETE an asset (Admin only)
 app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res) => {
     try {
@@ -202,11 +199,12 @@ app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res
     }
 });
 
-// Get equipment count by category (excluding soft-deleted)
+// Get equipment count by category (excluding soft-deleted) - This route is specific, not general summary
 app.get('/api/equipment/count/:category', auth, async (req, res) => {
     try {
         const count = await Equipment.countDocuments({
             category: req.params.category,
+            isDeleted: { $ne: true } // Exclude deleted items from general counts
         });
         res.json({ count });
     } catch (err) {
@@ -214,7 +212,75 @@ app.get('/api/equipment/count/:category', auth, async (req, res) => {
     }
 });
 
+// --- NEW DASHBOARD API ENDPOINTS ---
 
- 
- 
+// @route   GET /api/equipment/summary
+// @desc    Get summary counts for dashboard
+// @access  Private
+app.get('/api/equipment/summary', auth, async (req, res) => {
+    try {
+        const totalAssets = await Equipment.countDocuments({ isDeleted: { $ne: true } });
+        const inUse = await Equipment.countDocuments({ status: 'In Use', isDeleted: { $ne: true } });
+        const available = await Equipment.countDocuments({ status: 'In Stock', isDeleted: { $ne: true } });
+        const damaged = await Equipment.countDocuments({ status: 'Damaged', isDeleted: { $ne: true } });
+        const eWaste = await Equipment.countDocuments({ status: 'E-Waste', isDeleted: { $ne: true } });
+
+        res.json({
+            totalAssets,
+            inUse,
+            available,
+            damaged,
+            eWaste,
+        });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   GET /api/equipment/total-value
+// @desc    Calculate total value of assets (excluding soft-deleted)
+// @access  Private
+app.get('/api/equipment/total-value', auth, async (req, res) => {
+    try {
+        const result = await Equipment.aggregate([
+            { $match: { isDeleted: { $ne: true } } }, // Only consider non-deleted items
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: "$purchasePrice" }
+                }
+            }
+        ]);
+
+        const totalValue = result.length > 0 ? result[0].total : 0;
+        res.json({ totalValue });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   GET /api/equipment/expiring-warranty
+// @desc    Get assets with warranty expiring in 30 days (excluding E-Waste and Damaged)
+// @access  Private
+app.get('/api/equipment/expiring-warranty', auth, async (req, res) => {
+    try {
+        const thirtyDaysFromNow = moment().add(30, 'days').toDate();
+        const now = moment().toDate();
+
+        const expiringItems = await Equipment.find({
+            warrantyInfo: { $ne: null, $lte: thirtyDaysFromNow }, // Not null and less than or equal to 30 days from now
+            status: { $nin: ['E-Waste', 'Damaged'] }, // Only consider active items
+            isDeleted: { $ne: true } // Also exclude soft-deleted items
+        }).select('model serialNumber warrantyInfo'); // Select only necessary fields
+
+        res.json(expiringItems);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// --- Server Start ---
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
