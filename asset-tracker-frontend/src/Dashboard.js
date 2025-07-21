@@ -1,13 +1,38 @@
-import React, { useEffect, useState } from 'react';
-import { Card, Col, Row, Statistic, Typography, Divider, List, Button, Spin, Alert } from 'antd';
+import React, { useEffect, useState, useCallback } from 'react';
+import { Card, Col, Row, Statistic, Typography, List, Button, Spin, Alert, Table, Tag, Input, Space } from 'antd';
 import {
     DatabaseOutlined, CheckCircleOutlined, ToolOutlined, WarningOutlined, DeleteOutlined,
-    DollarOutlined, PlusOutlined
+    PlusOutlined, SearchOutlined
 } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
-import axios from 'axios'; // Make sure axios is installed: npm install axios
+import axios from 'axios';
+import moment from 'moment'; // Import moment for date formatting and sorting
 
 const { Title, Text } = Typography;
+
+// Helper functions (could be moved to a utils file)
+const getStatusColor = (status) => {
+    const colors = { 'In Use': '#7ED321', 'In Stock': '#4A90E2', 'Damaged': '#D0021B', 'E-Waste': '#8B572A' };
+    return colors[status] || 'default'; // Use hex codes for background color
+};
+
+const getWarrantyTag = (date) => {
+    if (!date) return <Text disabled>N/A</Text>;
+
+    const warrantyDate = moment(date); // Moment automatically handles various date string formats
+    if (!warrantyDate.isValid()) return <Text disabled>Invalid Date</Text>;
+
+    const today = moment();
+    const thirtyDaysFromNow = moment().add(30, 'days');
+
+    if (warrantyDate.isBefore(today, 'day')) { // 'day' to compare just the date part
+        return <Tag color="error">Expired: {warrantyDate.format('DD MMM YYYY')}</Tag>;
+    }
+    if (warrantyDate.isBefore(thirtyDaysFromNow, 'day')) {
+        return <Tag color="warning">Expires: {warrantyDate.format('DD MMM YYYY')}</Tag>;
+    }
+    return warrantyDate.format('DD MMM YYYY');
+};
 
 const Dashboard = () => {
     const [summaryData, setSummaryData] = useState({
@@ -16,278 +41,371 @@ const Dashboard = () => {
         available: 0,
         damaged: 0,
         eWaste: 0,
-        totalValue: 0,
-        assetDistribution: { // Initialize with zero counts and percentages
-            inUse: { count: 0, percentage: 0 },
-            available: { count: 0, percentage: 0 },
-            damaged: { count: 0, percentage: 0 },
-            eWaste: { count: 0, percentage: 0 },
-        },
     });
+    const [allAssets, setAllAssets] = useState([]); // All assets fetched from API
+    const [filteredAssets, setFilteredAssets] = useState([]); // Assets currently displayed in table
+    const [activeFilter, setActiveFilter] = useState('All'); // 'All', 'In Use', 'In Stock', 'Damaged', 'E-Waste'
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [searchText, setSearchText] = useState('');
+    const [searchedColumn, setSearchedColumn] = useState('');
+
+    const getAuthHeader = useCallback(() => {
+        const token = localStorage.getItem('token');
+        return token ? { 'x-auth-token': token } : {};
+    }, []);
+
+    const fetchAllData = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            // Fetch summary counts
+            const summaryRes = await axios.get('http://localhost:5000/api/equipment/summary', { headers: getAuthHeader() });
+            const fetchedSummary = summaryRes.data;
+            setSummaryData(fetchedSummary);
+
+            // Fetch ALL assets for client-side filtering
+            const assetsRes = await axios.get('http://localhost:5000/api/equipment', { headers: getAuthHeader() });
+            setAllAssets(assetsRes.data);
+
+        } catch (err) {
+            console.error('Failed to fetch dashboard data:', err);
+            setError('Failed to load dashboard data. Please check your network and backend server.');
+        } finally {
+            setLoading(false);
+        }
+    }, [getAuthHeader]);
 
     useEffect(() => {
-        const fetchDashboardData = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                // Fetch summary counts for different statuses
-                const summaryRes = await axios.get('http://localhost:5000/api/equipment/summary');
-                const fetchedSummary = summaryRes.data;
+        fetchAllData();
+    }, [fetchAllData]);
 
-                // Fetch total value of assets
-                const totalValueRes = await axios.get('http://localhost:5000/api/equipment/total-value');
-                const totalValue = totalValueRes.data.totalValue || 0;
+    // Effect for filtering assets based on activeFilter or search text
+    useEffect(() => {
+        let currentFiltered = allAssets;
 
-                // Prepare data for Asset Distribution section
-                const distributionCounts = {
-                    inUse: fetchedSummary.inUse || 0,
-                    available: fetchedSummary.available || 0, // Assuming 'In Stock' is 'available'
-                    damaged: fetchedSummary.damaged || 0,
-                    eWaste: fetchedSummary.eWaste || 0,
-                };
+        // Apply status filter
+        if (activeFilter !== 'All') {
+            currentFiltered = currentFiltered.filter(asset => asset.status === activeFilter);
+        }
 
-                const totalAssetsForDistribution = distributionCounts.inUse + distributionCounts.available + distributionCounts.damaged + distributionCounts.eWaste;
+        // Apply search filter (if searchText is not empty)
+        if (searchText) {
+            currentFiltered = currentFiltered.filter(asset =>
+                Object.keys(asset).some(key =>
+                    String(asset[key]).toLowerCase().includes(searchText.toLowerCase())
+                )
+            );
+        }
 
-                setSummaryData({
-                    totalAssets: fetchedSummary.totalAssets || 0,
-                    inUse: fetchedSummary.inUse || 0,
-                    available: fetchedSummary.available || 0,
-                    damaged: fetchedSummary.damaged || 0,
-                    eWaste: fetchedSummary.eWaste || 0,
-                    totalValue: totalValue,
-                    assetDistribution: {
-                        inUse: { count: distributionCounts.inUse, percentage: totalAssetsForDistribution > 0 ? ((distributionCounts.inUse / totalAssetsForDistribution) * 100).toFixed(1) : 0 },
-                        available: { count: distributionCounts.available, percentage: totalAssetsForDistribution > 0 ? ((distributionCounts.available / totalAssetsForDistribution) * 100).toFixed(1) : 0 },
-                        damaged: { count: distributionCounts.damaged, percentage: totalAssetsForDistribution > 0 ? ((distributionCounts.damaged / totalAssetsForDistribution) * 100).toFixed(1) : 0 },
-                        eWaste: { count: distributionCounts.eWaste, percentage: totalAssetsForDistribution > 0 ? ((distributionCounts.eWaste / totalAssetsForDistribution) * 100).toFixed(1) : 0 },
-                    },
-                });
+        setFilteredAssets(currentFiltered);
+    }, [allAssets, activeFilter, searchText]);
 
-            } catch (err) {
-                console.error('Failed to fetch dashboard data:', err);
-                // Set a user-friendly error message
-                setError('Failed to load dashboard data. Please check your network and backend server.');
-            } finally {
-                setLoading(false);
-            }
-        };
 
-        fetchDashboardData();
-    }, []); // Empty dependency array means this runs once on component mount
+    // --- Table Column Search Functionality ---
+    const handleSearch = (selectedKeys, confirm, dataIndex) => {
+        confirm();
+        setSearchText(selectedKeys[0]);
+        setSearchedColumn(dataIndex);
+    };
 
-    if (loading) {
-        return <div style={{ textAlign: 'center', padding: '50px', background: '#282c34', minHeight: '100vh' }}><Spin size="large" tip="Loading dashboard..." /></div>;
-    }
+    const handleReset = (clearFilters) => {
+        clearFilters();
+        setSearchText('');
+    };
 
-    if (error) {
-        return (
-            <div style={{ padding: '24px', background: '#282c34', minHeight: '100vh' }}>
-                <Alert message="Error" description={error} type="error" showIcon style={{marginBottom: '20px'}} />
-                {/* Optionally, add a retry button */}
-                <Button type="primary" onClick={() => window.location.reload()}>Retry</Button>
+    const getColumnSearchProps = (dataIndex) => ({
+        filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+            <div style={{ padding: 8 }}>
+                <Input
+                    placeholder={`Search ${dataIndex}`}
+                    value={selectedKeys[0]}
+                    onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+                    onPressEnter={() => handleSearch(selectedKeys, confirm, dataIndex)}
+                    style={{ marginBottom: 8, display: 'block' }}
+                />
+                <Space>
+                    <Button
+                        type="primary"
+                        onClick={() => handleSearch(selectedKeys, confirm, dataIndex)}
+                        icon={<SearchOutlined />}
+                        size="small"
+                        style={{ width: 90 }}
+                    >
+                        Search
+                    </Button>
+                    <Button onClick={() => clearFilters && handleReset(clearFilters)} size="small" style={{ width: 90 }}>
+                        Reset
+                    </Button>
+                </Space>
             </div>
-        );
-    }
+        ),
+        filterIcon: (filtered) => <SearchOutlined style={{ color: filtered ? '#1890ff' : undefined }} />,
+        onFilter: (value, record) =>
+            record[dataIndex] ? String(record[dataIndex]).toLowerCase().includes(value.toLowerCase()) : '',
+        onFilterDropdownOpenChange: (visible) => {
+            // if (visible) { setTimeout(() => searchInput.select(), 100); } // Re-add if you have searchInput ref
+        },
+        render: (text) =>
+            searchedColumn === dataIndex ? (
+                <Text mark>{text}</Text>
+            ) : (
+                text
+            ),
+    });
 
-    // Styles to match the dark theme and card appearance from the screenshot
-    const cardStyle = {
-        background: '#1d2128', // Dark background for cards
-        borderRadius: '8px',
-        color: '#fff', // White text
-        boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
-        border: '1px solid #333',
-    };
+    // --- Table Columns Definition ---
+    const dashboardTableColumns = [
+        {
+            title: 'SI No.',
+            key: 'siNo',
+            render: (text, record, index) => index + 1,
+            width: 70,
+            fixed: 'left',
+        },
+        {
+            title: 'Asset ID',
+            dataIndex: 'assetId',
+            key: 'assetId',
+            ...getColumnSearchProps('assetId'),
+            sorter: (a, b) => a.assetId.localeCompare(b.assetId),
+            width: 120,
+        },
+        {
+            title: 'Category',
+            dataIndex: 'category',
+            key: 'category',
+            ...getColumnSearchProps('category'),
+            sorter: (a, b) => a.category.localeCompare(b.category),
+            width: 150,
+        },
+        {
+            title: 'Model',
+            dataIndex: 'model',
+            key: 'model',
+            ...getColumnSearchProps('model'),
+            sorter: (a, b) => a.model.localeCompare(b.model),
+            width: 180,
+        },
+        {
+            title: 'Serial Number',
+            dataIndex: 'serialNumber',
+            key: 'serialNumber',
+            ...getColumnSearchProps('serialNumber'),
+            width: 150,
+        },
+        {
+            title: 'Warranty Expiry',
+            dataIndex: 'warrantyInfo',
+            key: 'warrantyInfo',
+            render: (date) => getWarrantyTag(date),
+            sorter: (a, b) => moment(a.warrantyInfo).unix() - moment(b.warrantyInfo).unix(),
+            width: 150,
+        },
+        {
+            title: 'Location',
+            dataIndex: 'location',
+            key: 'location',
+            ...getColumnSearchProps('location'),
+            width: 150,
+        },
+        {
+            title: 'Comments',
+            dataIndex: 'comment',
+            key: 'comment',
+            ellipsis: true,
+            width: 200,
+        },
+        // Conditional columns based on activeFilter (for clarity, all relevant columns are defined, but their values might be null)
+        {
+            title: 'Assignee Name',
+            dataIndex: 'assigneeName',
+            key: 'assigneeName',
+            ...getColumnSearchProps('assigneeName'),
+            width: 150,
+            // render: (text) => activeFilter === 'In Use' ? text : 'N/A', // Can apply this if you want to hide data for other statuses
+        },
+        {
+            title: 'Employee Email',
+            dataIndex: 'employeeEmail',
+            key: 'employeeEmail',
+            ...getColumnSearchProps('employeeEmail'),
+            width: 180,
+            // render: (text) => activeFilter === 'In Use' ? text : 'N/A',
+        },
+        {
+            title: 'Department',
+            dataIndex: 'department',
+            key: 'department',
+            ...getColumnSearchProps('department'),
+            width: 150,
+            // render: (text) => activeFilter === 'In Use' ? text : 'N/A',
+        },
+        {
+            title: 'Damage Description',
+            dataIndex: 'damageDescription',
+            key: 'damageDescription',
+            ...getColumnSearchProps('damageDescription'),
+            ellipsis: true,
+            width: 200,
+            // render: (text) => activeFilter === 'Damaged' ? text : 'N/A',
+        },
+        {
+            title: 'Status', // Always show status, just filter by it
+            dataIndex: 'status',
+            key: 'status',
+            render: (status) => (
+                <Tag color={getStatusColor(status)} style={{color: '#fff', borderColor: getStatusColor(status)}}>
+                    {status ? status.toUpperCase() : ''}
+                </Tag>
+            ),
+            filters: [
+                { text: 'In Use', value: 'In Use' },
+                { text: 'In Stock', value: 'In Stock' },
+                { text: 'Damaged', value: 'Damaged' },
+                { text: 'E-Waste', value: 'E-Waste' },
+            ],
+            onFilter: (value, record) => record.status === value,
+            sorter: (a, b) => a.status.localeCompare(b.status),
+            width: 120,
+            fixed: 'right',
+        },
+    ];
 
-    const statisticValueStyle = {
-        color: '#fff', // White for statistic values
-    };
 
-    const listStyle = {
-        background: '#1d2128',
-        borderRadius: '8px',
-        padding: '16px',
-        color: '#fff',
-        boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
-        border: '1px solid #333',
-        height: '100%', // Ensure it fills the column height
-    };
-
-    const listItemStyle = {
-        borderBottom: '1px solid #333', // Lighter border for list items
-        padding: '12px 0',
-        color: '#fff',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    };
-
-    const lastListItemStyle = {
-        borderBottom: 'none', // No border for the last item
-    };
-
-    const quickActionsCardStyle = {
-        background: '#1d2128',
-        borderRadius: '8px',
-        color: '#fff',
-        boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
-        border: '1px solid #333',
-        padding: '16px',
-        height: '100%', // Ensure it fills the column height
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-around', // Distribute items evenly
-    };
-
-    const quickActionButtonStyle = {
+    // Button styles for status filters
+    const filterButtonStyle = (status) => ({
         width: '100%',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'flex-start',
-        height: '50px',
-        fontSize: '16px',
-        marginBottom: '10px', // Space between buttons
-        backgroundColor: '#282c34', // Darker button background
-        color: '#fff',
-        borderColor: '#444',
-        transition: 'all 0.3s ease', // Smooth transition for hover effects
-    };
-
-    const primaryActionButtonStyle = { // For "Add New Asset"
-        ...quickActionButtonStyle,
-        backgroundColor: '#4A90E2', // Blue from your logo
-        borderColor: '#4A90E2',
-    };
-    const warningActionButtonStyle = { // For "Review Damaged Assets"
-        ...quickActionButtonStyle,
-        backgroundColor: '#D0021B', // Red from your logo
-        borderColor: '#D0021B',
-    };
-    const successActionButtonStyle = { // For "View Available Assets"
-        ...quickActionButtonStyle,
-        backgroundColor: '#7ED321', // Greenish from your in-use icon
-        borderColor: '#7ED321',
-    };
+        justifyContent: 'center',
+        height: '40px',
+        fontSize: '14px',
+        marginBottom: '10px',
+        backgroundColor: activeFilter === status ? getStatusColor(status) : '#f0f2f5', // Highlight active
+        color: activeFilter === status ? '#fff' : 'rgba(0, 0, 0, 0.85)',
+        borderColor: getStatusColor(status),
+        // Adding hover styles via inline style is tricky, AntD handles this normally
+        // We ensure the background color and text color are set for active state
+        // For inactive, default AntD button styles apply
+    });
 
 
     return (
-        <div style={{ padding: '24px', background: '#282c34', minHeight: '100%' }}> {/* Overall background */}
-            <Title level={3} style={{ color: '#fff', marginBottom: '24px' }}>Dashboard</Title>
+        <div style={{ padding: '24px', background: '#f0f2f5', minHeight: '100%' }}>
+            <Title level={3} style={{ marginBottom: '24px' }}>Dashboard</Title>
 
+            {/* Top Row for Summary Statistics */}
             <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
                 <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card style={cardStyle}>
+                    <Card>
                         <Statistic
-                            title={<Text style={statisticValueStyle}>Total Assets</Text>}
+                            title="Total Assets"
                             value={summaryData.totalAssets}
-                            formatter={(value) => <Text style={statisticValueStyle}>{value}</Text>}
                             prefix={<DatabaseOutlined style={{ color: '#4A90E2' }} />}
-                            valueStyle={{ color: '#fff' }}
                         />
                     </Card>
                 </Col>
                 <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card style={cardStyle}>
+                    <Card>
                         <Statistic
-                            title={<Text style={statisticValueStyle}>In Use</Text>}
+                            title="In Use"
                             value={summaryData.inUse}
-                            formatter={(value) => <Text style={statisticValueStyle}>{value}</Text>}
                             prefix={<ToolOutlined style={{ color: '#7ED321' }} />}
-                            valueStyle={{ color: '#fff' }}
                         />
                     </Card>
                 </Col>
                 <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card style={cardStyle}>
+                    <Card>
                         <Statistic
-                            title={<Text style={statisticValueStyle}>Available</Text>}
-                            value={summaryData.available}
-                            formatter={(value) => <Text style={statisticValueStyle}>{value}</Text>}
+                            title="In Stock"
+                            value={summaryData.available} // Renamed from "Available" to "In Stock" to match common terminology
                             prefix={<CheckCircleOutlined style={{ color: '#F5A623' }} />}
-                            valueStyle={{ color: '#fff' }}
                         />
                     </Card>
                 </Col>
                 <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card style={cardStyle}>
+                    <Card>
                         <Statistic
-                            title={<Text style={statisticValueStyle}>Damaged</Text>}
+                            title="Damaged"
                             value={summaryData.damaged}
-                            formatter={(value) => <Text style={statisticValueStyle}>{value}</Text>}
                             prefix={<WarningOutlined style={{ color: '#D0021B' }} />}
-                            valueStyle={{ color: '#fff' }}
                         />
                     </Card>
                 </Col>
                 <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card style={cardStyle}>
+                    <Card>
                         <Statistic
-                            title={<Text style={statisticValueStyle}>E-Waste</Text>}
+                            title="E-Waste"
                             value={summaryData.eWaste}
-                            formatter={(value) => <Text style={statisticValueStyle}>{value}</Text>}
                             prefix={<DeleteOutlined style={{ color: '#8B572A' }} />}
-                            valueStyle={{ color: '#fff' }}
                         />
                     </Card>
                 </Col>
-                <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card style={cardStyle}>
-                        <Statistic
-                            title={<Text style={statisticValueStyle}>Total Value</Text>}
-                            value={summaryData.totalValue.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })} // Formats as Indian Rupees
-                            formatter={(value) => <Text style={statisticValueStyle}>{value}</Text>}
-                            prefix={<DollarOutlined style={{ color: '#50E3C2' }} />}
-                            valueStyle={{ color: '#fff' }}
-                        />
-                    </Card>
+                {/* Total Value / Cost Removed as per request */}
+            </Row>
+
+            {/* Quick Actions / Filter Buttons */}
+            <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+                <Col xs={24} sm={12} md={6} lg={4}>
+                    <Button
+                        style={{...filterButtonStyle('All'), backgroundColor: activeFilter === 'All' ? '#1890ff' : '#f0f2f5', color: activeFilter === 'All' ? '#fff' : 'rgba(0, 0, 0, 0.85)', borderColor: '#1890ff'}}
+                        onClick={() => setActiveFilter('All')}
+                    >
+                        <DatabaseOutlined style={{ marginRight: 8 }} /> All Assets
+                    </Button>
+                </Col>
+                <Col xs={24} sm={12} md={6} lg={4}>
+                    <Button
+                        style={{...filterButtonStyle('In Use'), backgroundColor: activeFilter === 'In Use' ? getStatusColor('In Use') : '#f0f2f5', color: activeFilter === 'In Use' ? '#fff' : 'rgba(0, 0, 0, 0.85)'}}
+                        onClick={() => setActiveFilter('In Use')}
+                    >
+                        <ToolOutlined style={{ marginRight: 8 }} /> In Use
+                    </Button>
+                </Col>
+                <Col xs={24} sm={12} md={6} lg={4}>
+                    <Button
+                        style={{...filterButtonStyle('In Stock'), backgroundColor: activeFilter === 'In Stock' ? getStatusColor('In Stock') : '#f0f2f5', color: activeFilter === 'In Stock' ? '#fff' : 'rgba(0, 0, 0, 0.85)'}}
+                        onClick={() => setActiveFilter('In Stock')}
+                    >
+                        <CheckCircleOutlined style={{ marginRight: 8 }} /> In Stock
+                    </Button>
+                </Col>
+                <Col xs={24} sm={12} md={6} lg={4}>
+                    <Button
+                        style={{...filterButtonStyle('Damaged'), backgroundColor: activeFilter === 'Damaged' ? getStatusColor('Damaged') : '#f0f2f5', color: activeFilter === 'Damaged' ? '#fff' : 'rgba(0, 0, 0, 0.85)'}}
+                        onClick={() => setActiveFilter('Damaged')}
+                    >
+                        <WarningOutlined style={{ marginRight: 8 }} /> Damaged
+                    </Button>
+                </Col>
+                <Col xs={24} sm={12} md={6} lg={4}>
+                    <Button
+                        style={{...filterButtonStyle('E-Waste'), backgroundColor: activeFilter === 'E-Waste' ? getStatusColor('E-Waste') : '#f0f2f5', color: activeFilter === 'E-Waste' ? '#fff' : 'rgba(0, 0, 0, 0.85)'}}
+                        onClick={() => setActiveFilter('E-Waste')}
+                    >
+                        <DeleteOutlined style={{ marginRight: 8 }} /> E-Waste
+                    </Button>
+                </Col>
+                <Col xs={24} sm={12} md={6} lg={4}>
+                    <Link to="/add">
+                        <Button type="primary" icon={<PlusOutlined />} style={{ width: '100%', height: '40px', fontSize: '14px', backgroundColor: '#1890ff', borderColor: '#1890ff' }}>
+                            Add New Asset
+                        </Button>
+                    </Link>
                 </Col>
             </Row>
 
-            <Row gutter={[16, 16]}>
-                <Col xs={24} lg={12}>
-                    <div style={listStyle}>
-                        <Title level={4} style={{ color: '#fff', marginBottom: '16px' }}>Asset Distribution</Title>
-                        <List
-                            itemLayout="horizontal"
-                            dataSource={[
-                                { label: 'In Use', value: summaryData.assetDistribution.inUse },
-                                { label: 'Available', value: summaryData.assetDistribution.available },
-                                { label: 'Damaged', value: summaryData.assetDistribution.damaged },
-                                { label: 'E-Waste', value: summaryData.assetDistribution.eWaste },
-                            ]}
-                            renderItem={(item, index) => (
-                                <List.Item style={index === 3 ? lastListItemStyle : listItemStyle}>
-                                    <Text style={{ color: '#fff' }}>{item.label}</Text>
-                                    <Text style={{ color: '#fff' }}>
-                                        {item.value.count} ({item.value.percentage}%)
-                                    </Text>
-                                </List.Item>
-                            )}
-                        />
-                    </div>
-                </Col>
-                <Col xs={24} lg={12}>
-                    <div style={quickActionsCardStyle}>
-                        <Title level={4} style={{ color: '#fff', marginBottom: '16px' }}>Quick Actions</Title>
-                        <Link to="/add">
-                            <Button type="primary" icon={<PlusOutlined />} style={primaryActionButtonStyle}>
-                                Add New Asset
-                            </Button>
-                        </Link>
-                        <Link to="/damaged">
-                            <Button type="primary" icon={<WarningOutlined />} style={warningActionButtonStyle}>
-                                Review Damaged Assets
-                            </Button>
-                        </Link>
-                        <Link to="/in-stock">
-                            <Button type="primary" icon={<CheckCircleOutlined />} style={successActionButtonStyle}>
-                                View Available Assets
-                            </Button>
-                        </Link>
-                    </div>
-                </Col>
-            </Row>
+            {/* Asset Table */}
+            <Card title={<Title level={4}>Asset List ({activeFilter})</Title>} style={{ marginTop: '24px' }}>
+                <Table
+                    columns={dashboardTableColumns}
+                    dataSource={filteredAssets.map((item, index) => ({ ...item, key: item._id || index }))}
+                    pagination={{ pageSize: 10 }}
+                    scroll={{ x: 'max-content' }}
+                    loading={loading}
+                />
+            </Card>
         </div>
     );
 };

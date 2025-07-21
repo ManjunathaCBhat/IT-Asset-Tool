@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 5000;
 
 // --- Middleware ---
 app.use(cors());
-app.use(express.json());
+app.use(express.json()); // For parsing application/json
 
 // --- Database Connection ---
 const MONGO_URI = process.env.mongo_uri;
@@ -32,7 +32,7 @@ const EquipmentSchema = new mongoose.Schema({
     status: { type: String, required: true, enum: ['In Use', 'In Stock', 'Damaged', 'E-Waste'] },
     model: { type: String },
     serialNumber: { type: String },
-    warrantyInfo: { type: String }, // Assuming this is a date string or Date object
+    warrantyInfo: { type: String }, // Storing as string to keep it flexible for Moment.js parsing
     location: { type: String },
     comment: { type: String },
     assigneeName: { type: String },
@@ -41,7 +41,7 @@ const EquipmentSchema = new mongoose.Schema({
     phoneNumber: { type: String },
     department: { type: String },
     damageDescription: { type: String },
-    purchasePrice: { type: Number, default: 0 }, // Added purchasePrice for total value calculation
+    purchasePrice: { type: Number, default: 0 }, // Crucial for total value calculation
     isDeleted: {
         type: Boolean,
         default: false
@@ -90,14 +90,16 @@ const auth = (req, res, next) => {
     if (!token) return res.status(401).json({ msg: 'No token, authorization denied' });
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        req.user = decoded.user;
+        req.user = decoded.user; // Attach user info to request
         next();
     } catch (e) {
         res.status(400).json({ msg: 'Token is not valid' });
     }
 };
+
 const requireRole = (roles) => (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    // Ensure req.user and req.user.role exist before checking
+    if (!req.user || !roles.includes(req.user.role)) {
         return res.status(403).json({ msg: 'Access denied. Insufficient role.' });
     }
     next();
@@ -105,7 +107,7 @@ const requireRole = (roles) => (req, res, next) => {
 
 // --- API Endpoints ---
 
-// --- User Endpoints ---
+// --- User Endpoints --- (Keep these in the same order)
 app.post('/api/users/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -118,14 +120,16 @@ app.post('/api/users/login', async (req, res) => {
             if (err) throw err;
             res.json({ token, user: payload.user });
         });
-    } catch (err) { res.status(500).send('Server error'); }
+    } catch (err) { console.error(err.message); res.status(500).send('Server error'); }
 });
+
 app.get('/api/users', [auth, requireRole(['Admin'])], async (req, res) => {
     try {
         const users = await User.find().select('-password');
         res.json(users);
-    } catch (err) { res.status(500).send('Server Error'); }
+    } catch (err) { console.error(err.message); res.status(500).send('Server Error'); }
 });
+
 app.post('/api/users/create', [auth, requireRole(['Admin'])], async (req, res) => {
     const { email, password, role } = req.body;
     try {
@@ -136,84 +140,27 @@ app.post('/api/users/create', [auth, requireRole(['Admin'])], async (req, res) =
         user.password = await bcrypt.hash(password, salt);
         await user.save();
         res.json({ msg: 'User created successfully' });
-    } catch (err) { res.status(500).send('Server Error'); }
+    } catch (err) { console.error(err.message); res.status(500).send('Server Error'); }
 });
+
 app.delete('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) => {
     try {
-        await User.findByIdAndRemove(req.params.id);
-        res.json({ msg: 'User deleted' });
-    } catch (err) { res.status(500).send('Server Error'); }
-});
-
-
-// --- Equipment Endpoints ---
-
-// GET all equipment (that is NOT soft-deleted)
-app.get('/api/equipment', auth, async (req, res) => {
-    try {
-        const equipment = await Equipment.find({ isDeleted: { $ne: true } }).sort({ createdAt: -1 });
-        res.json(equipment);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-});
-
-app.post('/api/equipment', [auth, requireRole(['Admin', 'Editor'])], async (req, res) => {
-    const newEquipment = new Equipment(req.body);
-    try {
-        const savedEquipment = await newEquipment.save();
-        res.status(201).json(savedEquipment);
-    } catch (err) {
-            if (err.name === 'ValidationError') {
-                const messages = Object.values(err.errors).map(val => val.message);
-                return res.status(400).json({ message: messages.join('. ') });
-            }
-            console.error(err);
-            res.status(500).json({ message: 'Server error while creating equipment.' });
-    }
-});
-
-app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (req, res) => {
-    try {
-        const updatedEquipment = await Equipment.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        res.json(updatedEquipment);
-    } catch (err) {
-        res.status(400).json({ message: err.message });
-    }
-});
-
-// SOFT DELETE an asset (Admin only)
-app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res) => {
-    try {
-        const softDeletedEquipment = await Equipment.findByIdAndUpdate(
-            req.params.id,
-            { isDeleted: true },
-            { new: true }
-        );
-        if (!softDeletedEquipment) {
-            return res.status(404).json({ message: 'Equipment not found' });
+        // Prevent deleting the currently logged-in admin or the seeded admin
+        if (req.params.id === req.user.id) {
+            return res.status(400).json({ msg: 'Cannot delete your own account' });
         }
-        res.json({ message: 'Equipment marked as deleted successfully' });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
+        const deletedUser = await User.findByIdAndRemove(req.params.id);
+        if (!deletedUser) {
+            return res.status(404).json({ msg: 'User not found' });
+        }
+        res.json({ msg: 'User deleted' });
+    } catch (err) { console.error(err.message); res.status(500).send('Server Error'); }
 });
 
-// Get equipment count by category (excluding soft-deleted) - This route is specific, not general summary
-app.get('/api/equipment/count/:category', auth, async (req, res) => {
-    try {
-        const count = await Equipment.countDocuments({
-            category: req.params.category,
-            isDeleted: { $ne: true } // Exclude deleted items from general counts
-        });
-        res.json({ count });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-});
 
-// --- NEW DASHBOARD API ENDPOINTS ---
+// --- Equipment Endpoints (REORDERED FOR SPECIFICITY) ---
 
+// 1. Dashboard Specific Summary Endpoints (Most Specific paths first)
 // @route   GET /api/equipment/summary
 // @desc    Get summary counts for dashboard
 // @access  Private
@@ -233,7 +180,7 @@ app.get('/api/equipment/summary', auth, async (req, res) => {
             eWaste,
         });
     } catch (err) {
-        console.error(err.message);
+        console.error('Error in /api/equipment/summary:', err.message);
         res.status(500).send('Server Error');
     }
 });
@@ -256,7 +203,7 @@ app.get('/api/equipment/total-value', auth, async (req, res) => {
         const totalValue = result.length > 0 ? result[0].total : 0;
         res.json({ totalValue });
     } catch (err) {
-        console.error(err.message);
+        console.error('Error in /api/equipment/total-value:', err.message);
         res.status(500).send('Server Error');
     }
 });
@@ -267,20 +214,95 @@ app.get('/api/equipment/total-value', auth, async (req, res) => {
 app.get('/api/equipment/expiring-warranty', auth, async (req, res) => {
     try {
         const thirtyDaysFromNow = moment().add(30, 'days').toDate();
-        const now = moment().toDate();
+        // The 'now' variable was unused, removed for cleaner code
 
         const expiringItems = await Equipment.find({
             warrantyInfo: { $ne: null, $lte: thirtyDaysFromNow }, // Not null and less than or equal to 30 days from now
-            status: { $nin: ['E-Waste', 'Damaged'] }, // Only consider active items
+            status: { $nin: ['E-Waste', 'Damaged'] }, // Only consider active items for warranty alerts
             isDeleted: { $ne: true } // Also exclude soft-deleted items
         }).select('model serialNumber warrantyInfo'); // Select only necessary fields
 
         res.json(expiringItems);
     } catch (err) {
-        console.error(err.message);
+        console.error('Error in /api/equipment/expiring-warranty:', err.message);
         res.status(500).send('Server Error');
     }
 });
+
+// 2. Specific Dynamic Route (should come before the general /api/equipment)
+// Get equipment count by category (excluding soft-deleted) - This route is specific
+app.get('/api/equipment/count/:category', auth, async (req, res) => {
+    try {
+        const count = await Equipment.countDocuments({
+            category: req.params.category,
+            isDeleted: { $ne: true } // Exclude deleted items from general counts
+        });
+        res.json({ count });
+    } catch (err) {
+        console.error('Error in /api/equipment/count/:category:', err.message);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// 3. General Equipment Routes (More general, placed after specific ones)
+// GET all equipment (that is NOT soft-deleted)
+app.get('/api/equipment', auth, async (req, res) => {
+    try {
+        const equipment = await Equipment.find({ isDeleted: { $ne: true } }).sort({ createdAt: -1 });
+        res.json(equipment);
+    } catch (err) {
+        console.error('Error in /api/equipment (GET all):', err.message);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+app.post('/api/equipment', [auth, requireRole(['Admin', 'Editor'])], async (req, res) => {
+    const newEquipment = new Equipment(req.body);
+    try {
+        const savedEquipment = await newEquipment.save();
+        res.status(201).json(savedEquipment);
+    } catch (err) {
+        if (err.name === 'ValidationError') {
+            const messages = Object.values(err.errors).map(val => val.message);
+            return res.status(400).json({ message: messages.join('. ') });
+        }
+        console.error('Error in /api/equipment (POST):', err); // Log full error for POST
+        res.status(500).json({ message: 'Server error while creating equipment.' });
+    }
+});
+
+app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (req, res) => {
+    try {
+        const updatedEquipment = await Equipment.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }); // Added runValidators
+        if (!updatedEquipment) return res.status(404).json({ message: 'Equipment not found' });
+        res.json(updatedEquipment);
+    } catch (err) {
+        if (err.name === 'ValidationError') { // Handle validation errors on PUT
+            const messages = Object.values(err.errors).map(val => val.message);
+            return res.status(400).json({ message: messages.join('. ') });
+        }
+        console.error('Error in /api/equipment/:id (PUT):', err.message);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res) => {
+    try {
+        const softDeletedEquipment = await Equipment.findByIdAndUpdate(
+            req.params.id,
+            { isDeleted: true },
+            { new: true }
+        );
+        if (!softDeletedEquipment) {
+            return res.status(404).json({ message: 'Equipment not found' });
+        }
+        res.json({ message: 'Equipment marked as deleted successfully' });
+    } catch (err) {
+        console.error('Error in /api/equipment/:id (DELETE):', err.message);
+        res.status(500).json({ message: err.message });
+    }
+});
+
 
 // --- Server Start ---
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
