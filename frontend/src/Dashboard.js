@@ -1,31 +1,34 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { Card, Col, Row, Statistic, Typography, List, Button, Spin, Alert, Table, Tag, Input, Space } from 'antd';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Card, Col, Row, Statistic, Typography, Button, Spin, Alert, Table, Tag, Input, Space } from 'antd';
 import {
     DatabaseOutlined, CheckCircleOutlined, ToolOutlined, WarningOutlined, DeleteOutlined,
-    PlusOutlined, SearchOutlined
+    PlusOutlined, SearchOutlined, EditOutlined, EyeOutlined,
+    // FIX: Ensure all used icons are imported here
+    LaptopOutlined, DesktopOutlined, ApiOutlined, AudioOutlined,
+    PrinterOutlined, WifiOutlined, MobileOutlined // <<< ADDED THESE MISSING IMPORTS
 } from '@ant-design/icons';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import moment from 'moment'; // Import moment for date formatting and sorting
+import moment from 'moment';
 
 const { Title, Text } = Typography;
 
-// Helper functions (could be moved to a utils file)
+// Helper for status colors (from your first snippet)
 const getStatusColor = (status) => {
     const colors = { 'In Use': '#7ED321', 'In Stock': '#4A90E2', 'Damaged': '#D0021B', 'E-Waste': '#8B572A' };
-    return colors[status] || 'default'; // Use hex codes for background color
+    return colors[status] || 'default';
 };
 
 const getWarrantyTag = (date) => {
     if (!date) return <Text disabled>N/A</Text>;
 
-    const warrantyDate = moment(date); // Moment automatically handles various date string formats
+    const warrantyDate = moment(date);
     if (!warrantyDate.isValid()) return <Text disabled>Invalid Date</Text>;
 
     const today = moment();
     const thirtyDaysFromNow = moment().add(30, 'days');
 
-    if (warrantyDate.isBefore(today, 'day')) { // 'day' to compare just the date part
+    if (warrantyDate.isBefore(today, 'day')) {
         return <Tag color="error">Expired: {warrantyDate.format('DD MMM YYYY')}</Tag>;
     }
     if (warrantyDate.isBefore(thirtyDaysFromNow, 'day')) {
@@ -34,40 +37,60 @@ const getWarrantyTag = (date) => {
     return warrantyDate.format('DD MMM YYYY');
 };
 
+// Helper for category icons (improved based on specific requests)
+const getCategoryIcon = (category) => {
+    switch (category.toLowerCase()) {
+        case 'laptop': return <LaptopOutlined />;
+        case 'monitor': return <DesktopOutlined />;
+        case 'mouse': return <ApiOutlined />; // Specific for mouse
+        case 'headphone': return <AudioOutlined />; // Specific for headphone
+        case 'keyboard': return <ApiOutlined />; // Good for general accessories
+        case 'printer': return <PrinterOutlined />;
+        case 'router': return <WifiOutlined />;
+        case 'server': return <DatabaseOutlined />; // General IT asset / database
+        case 'access point': return <WifiOutlined />;
+        case 'computer': return <DesktopOutlined />;
+        case 'chromebook': return <LaptopOutlined />;
+        case 'ipad': return <MobileOutlined />; // Use Mobile for tablet
+        case 'mobile': return <MobileOutlined />;
+        case 'cisco catos switch': return <WifiOutlined />; // Network gear
+        case 'cisco router': return <WifiOutlined />; // Network gear
+        case 'firewall': return <DatabaseOutlined />; // Generic IT asset
+        case 'network services': return <WifiOutlined />;
+        case 'rack': return <DatabaseOutlined />;
+        default: return <DatabaseOutlined />; // Default icon
+    }
+};
+
+
 const Dashboard = () => {
-    const [summaryData, setSummaryData] = useState({
-        totalAssets: 0,
-        inUse: 0,
-        available: 0,
-        damaged: 0,
-        eWaste: 0,
-    });
-    const [allAssets, setAllAssets] = useState([]); // All assets fetched from API
-    const [filteredAssets, setFilteredAssets] = useState([]); // Assets currently displayed in table
-    const [activeFilter, setActiveFilter] = useState('All'); // 'All', 'In Use', 'In Stock', 'Damaged', 'E-Waste'
+    const navigate = useNavigate();
+    const [totalAssetsCount, setTotalAssetsCount] = useState(0); // For the single total assets card
+    const [allAssets, setAllAssets] = useState([]); // Stores all fetched assets
+    const [filteredAssets, setFilteredAssets] = useState([]); // Assets currently displayed in table based on status filter
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [activeFilter, setActiveFilter] = useState('All'); // For the top status filter buttons
+
+    // For Ant Design Table Search
     const [searchText, setSearchText] = useState('');
     const [searchedColumn, setSearchedColumn] = useState('');
+    const searchInput = useRef(null); // Ref for search input in table filters
+
 
     const getAuthHeader = useCallback(() => {
         const token = localStorage.getItem('token');
         return token ? { 'x-auth-token': token } : {};
     }, []);
 
-    const fetchAllData = useCallback(async () => {
+    const fetchAllAssets = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            // Fetch summary counts
-            const summaryRes = await axios.get('http://localhost:5000/api/equipment/summary', { headers: getAuthHeader() });
-            const fetchedSummary = summaryRes.data;
-            setSummaryData(fetchedSummary);
-
-            // Fetch ALL assets for client-side filtering
             const assetsRes = await axios.get('http://localhost:5000/api/equipment', { headers: getAuthHeader() });
-            setAllAssets(assetsRes.data);
-
+            const fetchedAssets = assetsRes.data;
+            setAllAssets(fetchedAssets);
+            setTotalAssetsCount(fetchedAssets.length); // Update total assets count
         } catch (err) {
             console.error('Failed to fetch dashboard data:', err);
             setError('Failed to load dashboard data. Please check your network and backend server.');
@@ -77,32 +100,21 @@ const Dashboard = () => {
     }, [getAuthHeader]);
 
     useEffect(() => {
-        fetchAllData();
-    }, [fetchAllData]);
+        fetchAllAssets();
+    }, [fetchAllAssets]);
 
-    // Effect for filtering assets based on activeFilter or search text
+    // Effect for filtering assets based on activeFilter (for the table)
     useEffect(() => {
         let currentFiltered = allAssets;
 
-        // Apply status filter
         if (activeFilter !== 'All') {
             currentFiltered = currentFiltered.filter(asset => asset.status === activeFilter);
         }
-
-        // Apply search filter (if searchText is not empty)
-        if (searchText) {
-            currentFiltered = currentFiltered.filter(asset =>
-                Object.keys(asset).some(key =>
-                    String(asset[key]).toLowerCase().includes(searchText.toLowerCase())
-                )
-            );
-        }
-
         setFilteredAssets(currentFiltered);
-    }, [allAssets, activeFilter, searchText]);
+    }, [allAssets, activeFilter]);
 
 
-    // --- Table Column Search Functionality ---
+    // --- Table Column Search Functionality (from your initial code) ---
     const handleSearch = (selectedKeys, confirm, dataIndex) => {
         confirm();
         setSearchText(selectedKeys[0]);
@@ -118,6 +130,7 @@ const Dashboard = () => {
         filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
             <div style={{ padding: 8 }}>
                 <Input
+                    ref={searchInput} // Associate ref here
                     placeholder={`Search ${dataIndex}`}
                     value={selectedKeys[0]}
                     onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
@@ -144,7 +157,7 @@ const Dashboard = () => {
         onFilter: (value, record) =>
             record[dataIndex] ? String(record[dataIndex]).toLowerCase().includes(value.toLowerCase()) : '',
         onFilterDropdownOpenChange: (visible) => {
-            // if (visible) { setTimeout(() => searchInput.select(), 100); } // Re-add if you have searchInput ref
+            if (visible) { setTimeout(() => searchInput.current?.select(), 100); } // Use optional chaining
         },
         render: (text) =>
             searchedColumn === dataIndex ? (
@@ -184,7 +197,7 @@ const Dashboard = () => {
             dataIndex: 'model',
             key: 'model',
             ...getColumnSearchProps('model'),
-            sorter: (a, b) => a.model.localeCompare(b.model),
+            sorter: (a, b) => (a.model || '').localeCompare(b.model || ''), // Handle nulls for sorting
             width: 180,
         },
         {
@@ -199,7 +212,11 @@ const Dashboard = () => {
             dataIndex: 'warrantyInfo',
             key: 'warrantyInfo',
             render: (date) => getWarrantyTag(date),
-            sorter: (a, b) => moment(a.warrantyInfo).unix() - moment(b.warrantyInfo).unix(),
+            sorter: (a, b) => {
+                const dateA = moment(a.warrantyInfo);
+                const dateB = moment(b.warrantyInfo);
+                return (dateA.isValid() ? dateA.unix() : 0) - (dateB.isValid() ? dateB.unix() : 0);
+            },
             width: 150,
         },
         {
@@ -216,14 +233,12 @@ const Dashboard = () => {
             ellipsis: true,
             width: 200,
         },
-        // Conditional columns based on activeFilter (for clarity, all relevant columns are defined, but their values might be null)
         {
             title: 'Assignee Name',
             dataIndex: 'assigneeName',
             key: 'assigneeName',
             ...getColumnSearchProps('assigneeName'),
             width: 150,
-            // render: (text) => activeFilter === 'In Use' ? text : 'N/A', // Can apply this if you want to hide data for other statuses
         },
         {
             title: 'Employee Email',
@@ -231,7 +246,6 @@ const Dashboard = () => {
             key: 'employeeEmail',
             ...getColumnSearchProps('employeeEmail'),
             width: 180,
-            // render: (text) => activeFilter === 'In Use' ? text : 'N/A',
         },
         {
             title: 'Department',
@@ -239,7 +253,6 @@ const Dashboard = () => {
             key: 'department',
             ...getColumnSearchProps('department'),
             width: 150,
-            // render: (text) => activeFilter === 'In Use' ? text : 'N/A',
         },
         {
             title: 'Damage Description',
@@ -248,14 +261,13 @@ const Dashboard = () => {
             ...getColumnSearchProps('damageDescription'),
             ellipsis: true,
             width: 200,
-            // render: (text) => activeFilter === 'Damaged' ? text : 'N/A',
         },
         {
             title: 'Status', // Always show status, just filter by it
             dataIndex: 'status',
             key: 'status',
             render: (status) => (
-                <Tag color={getStatusColor(status)} style={{color: '#fff', borderColor: getStatusColor(status)}}>
+                <Tag color={getStatusColor(status)} style={{ color: '#fff', borderColor: getStatusColor(status) }}>
                     {status ? status.toUpperCase() : ''}
                 </Tag>
             ),
@@ -270,139 +282,128 @@ const Dashboard = () => {
             width: 120,
             fixed: 'right',
         },
+        {
+            title: 'Actions',
+            key: 'actions',
+            width: 120,
+            fixed: 'right',
+            render: (text, record) => (
+                <Space size="middle">
+                    <Button icon={<EyeOutlined />} size="small" title="View Details" onClick={() => navigate(`/view/${record._id}`)} />
+                    <Button icon={<EditOutlined />} size="small" title="Edit Asset" onClick={() => navigate(`/edit/${record._id}`)} />
+                    {/* Add more actions like Delete here later if needed */}
+                </Space>
+            ),
+        },
     ];
 
-
-    // Button styles for status filters
+    // Button styles for status filters (from your first snippet)
     const filterButtonStyle = (status) => ({
-        width: '100%',
+        width: 'auto', // Allow width to adjust based on content
+        minWidth: '100px', // Minimum width for consistency
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        height: '40px',
-        fontSize: '14px',
-        marginBottom: '10px',
-        backgroundColor: activeFilter === status ? getStatusColor(status) : '#f0f2f5', // Highlight active
+        height: '32px', // Standard AntD button height
+        fontSize: '13px',
+        marginRight: '8px', // Space between buttons
+        // Highlight active filter button
+        backgroundColor: activeFilter === status ? getStatusColor(status) : '#f0f2f5',
         color: activeFilter === status ? '#fff' : 'rgba(0, 0, 0, 0.85)',
-        borderColor: getStatusColor(status),
-        // Adding hover styles via inline style is tricky, AntD handles this normally
-        // We ensure the background color and text color are set for active state
-        // For inactive, default AntD button styles apply
+        borderColor: activeFilter === status ? getStatusColor(status) : '#d9d9d9', // AntD default border
+        border: '1px solid',
+        borderRadius: '4px' // AntD default border radius
     });
 
+    if (loading) {
+        return (
+            <div style={{ padding: '24px', textAlign: 'center' }}>
+                <Spin size="large" tip="Loading dashboard data..." />
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div style={{ padding: '24px' }}>
+                <Alert message="Error" description={error} type="error" showIcon />
+            </div>
+        );
+    }
 
     return (
-        <div style={{ padding: '24px', background: '#f0f2f5', minHeight: '100%' }}>
-            <Title level={3} style={{ marginBottom: '24px' }}>Dashboard</Title>
-
-            {/* Top Row for Summary Statistics */}
-            <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-                <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card>
-                        <Statistic
-                            title="Total Assets"
-                            value={summaryData.totalAssets}
-                            prefix={<DatabaseOutlined style={{ color: '#4A90E2' }} />}
-                        />
-                    </Card>
+        <div style={{ padding: '24px 20px', background: '#f0f2f5', minHeight: '100%', width: '100%' }}> {/* Adjusted padding */}
+            {/* Top Bar: Title and Filter Buttons */}
+            <Row justify="space-between" align="middle" style={{ marginBottom: '24px' }}>
+                <Col>
+                    <Title level={3} style={{ margin: 0 }}>IT Asset Management</Title>
                 </Col>
-                <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card>
-                        <Statistic
-                            title="In Use"
-                            value={summaryData.inUse}
-                            prefix={<ToolOutlined style={{ color: '#7ED321' }} />}
-                        />
-                    </Card>
+                <Col>
+                    <Space size={[8, 8]} wrap> {/* Use Space for responsive wrapping of buttons */}
+                        <Button
+                            style={{ ...filterButtonStyle('All'), backgroundColor: activeFilter === 'All' ? '#1890ff' : '#f0f2f5', color: activeFilter === 'All' ? '#fff' : 'rgba(0, 0, 0, 0.85)', borderColor: '#1890ff' }}
+                            onClick={() => setActiveFilter('All')}
+                        >
+                            <DatabaseOutlined style={{ marginRight: 8 }} /> All Assets
+                        </Button>
+                        <Button
+                            style={{ ...filterButtonStyle('In Use'), backgroundColor: activeFilter === 'In Use' ? getStatusColor('In Use') : '#f0f2f5', color: activeFilter === 'In Use' ? '#fff' : 'rgba(0, 0, 0, 0.85)' }}
+                            onClick={() => setActiveFilter('In Use')}
+                        >
+                            <ToolOutlined style={{ marginRight: 8 }} /> In Use
+                        </Button>
+                        <Button
+                            style={{ ...filterButtonStyle('In Stock'), backgroundColor: activeFilter === 'In Stock' ? getStatusColor('In Stock') : '#f0f2f5', color: activeFilter === 'In Stock' ? '#fff' : 'rgba(0, 0, 0, 0.85)' }}
+                            onClick={() => setActiveFilter('In Stock')}
+                        >
+                            <CheckCircleOutlined style={{ marginRight: 8 }} /> In Stock
+                        </Button>
+                        <Button
+                            style={{ ...filterButtonStyle('Damaged'), backgroundColor: activeFilter === 'Damaged' ? getStatusColor('Damaged') : '#f0f2f5', color: activeFilter === 'Damaged' ? '#fff' : 'rgba(0, 0, 0, 0.85)' }}
+                            onClick={() => setActiveFilter('Damaged')}
+                        >
+                            <WarningOutlined style={{ marginRight: 8 }} /> Damaged
+                        </Button>
+                        <Button
+                            style={{ ...filterButtonStyle('E-Waste'), backgroundColor: activeFilter === 'E-Waste' ? getStatusColor('E-Waste') : '#f0f2f5', color: activeFilter === 'E-Waste' ? '#fff' : 'rgba(0, 0, 0, 0.85)' }}
+                            onClick={() => setActiveFilter('E-Waste')}
+                        >
+                            <DeleteOutlined style={{ marginRight: 8 }} /> E-Waste
+                        </Button>
+                        {/* Modified Link to prevent a11y warning */}
+                        <Button
+                            type="primary"
+                            icon={<PlusOutlined />}
+                            style={{ minWidth: '100px', height: '32px' }}
+                            onClick={() => navigate('/add')} // Use navigate directly
+                        >
+                            Add Asset
+                        </Button>
+                    </Space>
                 </Col>
-                <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card>
-                        <Statistic
-                            title="In Stock"
-                            value={summaryData.available} // Renamed from "Available" to "In Stock" to match common terminology
-                            prefix={<CheckCircleOutlined style={{ color: '#F5A623' }} />}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card>
-                        <Statistic
-                            title="Damaged"
-                            value={summaryData.damaged}
-                            prefix={<WarningOutlined style={{ color: '#D0021B' }} />}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card>
-                        <Statistic
-                            title="E-Waste"
-                            value={summaryData.eWaste}
-                            prefix={<DeleteOutlined style={{ color: '#8B572A' }} />}
-                        />
-                    </Card>
-                </Col>
-                {/* Total Value / Cost Removed as per request */}
             </Row>
 
-            {/* Quick Actions / Filter Buttons */}
+            {/* Overall "Total Assets" Statistic Card */}
             <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-                <Col xs={24} sm={12} md={6} lg={4}>
-                    <Button
-                        style={{...filterButtonStyle('All'), backgroundColor: activeFilter === 'All' ? '#1890ff' : '#f0f2f5', color: activeFilter === 'All' ? '#fff' : 'rgba(0, 0, 0, 0.85)', borderColor: '#1890ff'}}
-                        onClick={() => setActiveFilter('All')}
-                    >
-                        <DatabaseOutlined style={{ marginRight: 8 }} /> All Assets
-                    </Button>
-                </Col>
-                <Col xs={24} sm={12} md={6} lg={4}>
-                    <Button
-                        style={{...filterButtonStyle('In Use'), backgroundColor: activeFilter === 'In Use' ? getStatusColor('In Use') : '#f0f2f5', color: activeFilter === 'In Use' ? '#fff' : 'rgba(0, 0, 0, 0.85)'}}
-                        onClick={() => setActiveFilter('In Use')}
-                    >
-                        <ToolOutlined style={{ marginRight: 8 }} /> In Use
-                    </Button>
-                </Col>
-                <Col xs={24} sm={12} md={6} lg={4}>
-                    <Button
-                        style={{...filterButtonStyle('In Stock'), backgroundColor: activeFilter === 'In Stock' ? getStatusColor('In Stock') : '#f0f2f5', color: activeFilter === 'In Stock' ? '#fff' : 'rgba(0, 0, 0, 0.85)'}}
-                        onClick={() => setActiveFilter('In Stock')}
-                    >
-                        <CheckCircleOutlined style={{ marginRight: 8 }} /> In Stock
-                    </Button>
-                </Col>
-                <Col xs={24} sm={12} md={6} lg={4}>
-                    <Button
-                        style={{...filterButtonStyle('Damaged'), backgroundColor: activeFilter === 'Damaged' ? getStatusColor('Damaged') : '#f0f2f5', color: activeFilter === 'Damaged' ? '#fff' : 'rgba(0, 0, 0, 0.85)'}}
-                        onClick={() => setActiveFilter('Damaged')}
-                    >
-                        <WarningOutlined style={{ marginRight: 8 }} /> Damaged
-                    </Button>
-                </Col>
-                <Col xs={24} sm={12} md={6} lg={4}>
-                    <Button
-                        style={{...filterButtonStyle('E-Waste'), backgroundColor: activeFilter === 'E-Waste' ? getStatusColor('E-Waste') : '#f0f2f5', color: activeFilter === 'E-Waste' ? '#fff' : 'rgba(0, 0, 0, 0.85)'}}
-                        onClick={() => setActiveFilter('E-Waste')}
-                    >
-                        <DeleteOutlined style={{ marginRight: 8 }} /> E-Waste
-                    </Button>
-                </Col>
-                <Col xs={24} sm={12} md={6} lg={4}>
-                    <Link to="/add">
-                        <Button type="primary" icon={<PlusOutlined />} style={{ width: '100%', height: '40px', fontSize: '14px', backgroundColor: '#1890ff', borderColor: '#1890ff' }}>
-                            Add New Asset
-                        </Button>
-                    </Link>
+                <Col xs={24} sm={12} md={8} lg={6} xl={4}>
+                    <Card style={{ textAlign: 'center', height: '100%' }}>
+                        <Statistic
+                            title="Total Assets"
+                            value={totalAssetsCount}
+                            prefix={<DatabaseOutlined style={{ color: '#4A90E2' }} />}
+                            valueStyle={{ fontSize: '30px' }}
+                        />
+                    </Card>
                 </Col>
             </Row>
 
             {/* Asset Table */}
-            <Card title={<Title level={4}>Asset List ({activeFilter})</Title>} style={{ marginTop: '24px' }}>
+            <Card title={<Title level={4}>Asset Details ({activeFilter})</Title>} style={{ marginTop: '0px' }}>
                 <Table
                     columns={dashboardTableColumns}
                     dataSource={filteredAssets.map((item, index) => ({ ...item, key: item._id || index }))}
                     pagination={{ pageSize: 10 }}
-                    scroll={{ x: 'max-content' }}
+                    scroll={{ x: 'max-content' }} // Enable horizontal scroll for many columns
                     loading={loading}
                 />
             </Card>

@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Table, Typography, message } from 'antd';
+import { Table, Typography, message, Input, Space } from 'antd';
 
 const { Title } = Typography;
+const { Search } = Input;
 
 const EWaste = () => {
     const [data, setData] = useState([]);
+    const [filteredData, setFilteredData] = useState([]);
+    const [searchText, setSearchText] = useState('');
 
     const getAuthHeader = () => {
         const token = localStorage.getItem('token');
@@ -19,6 +22,7 @@ const EWaste = () => {
             });
             const ewasteAssets = response.data.filter(item => item.status === 'E-Waste');
             setData(ewasteAssets);
+            setFilteredData(ewasteAssets); // initialize filtered data
         } catch (error) {
             console.error('Error fetching E-Waste assets:', error);
             message.error('Failed to fetch E-Waste assets.');
@@ -28,6 +32,17 @@ const EWaste = () => {
     useEffect(() => {
         fetchEWasteAssets();
     }, []);
+
+    const onSearch = (value) => {
+        setSearchText(value);
+        const filtered = data.filter((item) =>
+            item.category?.toLowerCase().includes(value.toLowerCase()) ||
+            item.model?.toLowerCase().includes(value.toLowerCase()) ||
+            item.serialNumber?.toLowerCase().includes(value.toLowerCase()) ||
+            item.comment?.toLowerCase().includes(value.toLowerCase())
+        );
+        setFilteredData(filtered);
+    };
 
     const columns = [
         {
@@ -60,8 +75,23 @@ const EWaste = () => {
 
     return (
         <>
-            <Title level={4}>E-Waste Assets</Title>
-            <Table columns={columns} dataSource={data} rowKey="_id" pagination={{ pageSize: 10 }} />
+            <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                <Title level={4}>E-Waste Assets</Title>
+                <Search
+                    placeholder="Search"
+                    onSearch={onSearch}
+                    onChange={(e) => onSearch(e.target.value)}
+                    value={searchText}
+                    allowClear
+                    style={{ width: 200 }}
+                />
+            </Space>
+            <Table
+                columns={columns}
+                dataSource={filteredData}
+                rowKey="_id"
+                pagination={{ pageSize: 10 }}
+            />
         </>
     );
 };

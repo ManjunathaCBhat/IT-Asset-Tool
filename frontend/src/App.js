@@ -15,6 +15,7 @@ import InUse from './InUse';
 import DamagedProducts from './DamagedProducts';
 import EWaste from './EWaste';
 import WelcomePage from './WelcomePage';
+import ResetPasswordPage from './ResetPasswordPage';
 
 const App = () => {
     const [user, setUser] = useState(null);
@@ -87,6 +88,8 @@ const App = () => {
                         <Route path="/" element={<WelcomePage />} />
                         <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
+                        <Route path="/reset-password" element={<ResetPasswordPage />} />
+
                     </>
                 ) : (
                     // --- Routes for AUTHENTICATED users ---
