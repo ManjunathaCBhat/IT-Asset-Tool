@@ -6,9 +6,9 @@ import axios from 'axios';
 // --- Component and Layout Imports ---
 import AppLayout from './AppLayout';
 import LoginPage from './LoginPage';
-import Dashboard from './Dashboard'; // <--- IMPORT THE NEW DASHBOARD COMPONENT
+import Dashboard from './Dashboard';
 import MasterView from './MasterView';
-import AddEquipment from './AddEquipment';
+import AddEquipment from './AddEquipment'; // Assuming path remains same
 import UserManagement from './UserManagement';
 import InStockView from './InStockView';
 import InUse from './InUse';
@@ -35,7 +35,6 @@ const App = () => {
     const fetchExpiringItems = async (token) => {
         if (!token) return;
         try {
-            // Adjust this API endpoint if your backend provides a specific one for expiring items
             const response = await axios.get('http://localhost:5000/api/equipment/expiring-warranty', {
                 headers: { 'x-auth-token': token }
             });
@@ -46,7 +45,6 @@ const App = () => {
         }
     };
 
-
     useEffect(() => {
         const token = localStorage.getItem('token');
         const userData = localStorage.getItem('user');
@@ -55,7 +53,7 @@ const App = () => {
                 const parsedUser = JSON.parse(userData);
                 setUser(parsedUser);
                 axios.defaults.headers.common['x-auth-token'] = token;
-                fetchExpiringItems(token); // Fetch expiring items on initial load if user is logged in
+                fetchExpiringItems(token);
             } catch (e) {
                 console.error("Failed to parse user from localStorage", e);
                 localStorage.removeItem('user');
@@ -70,7 +68,7 @@ const App = () => {
         localStorage.setItem('user', JSON.stringify(data.user));
         setUser(data.user);
         axios.defaults.headers.common['x-auth-token'] = data.token;
-        fetchExpiringItems(data.token); // Fetch expiring items after successful login
+        fetchExpiringItems(data.token);
     };
 
     // --- Render Logic ---
@@ -89,7 +87,6 @@ const App = () => {
                         <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                         <Route path="/reset-password" element={<ResetPasswordPage />} />
-
                     </>
                 ) : (
                     // --- Routes for AUTHENTICATED users ---
@@ -104,8 +101,9 @@ const App = () => {
                         }
                     >
                         {/* Dashboard is now the default child route for authenticated users */}
-                        <Route index element={<Dashboard />} /> {/* <--- NEW: Dashboard as index route */}
-                        <Route path="all-assets" element={<MasterView user={user} setExpiringItems={setExpiringItems} />} /> {/* <--- CHANGED PATH from / to /all-assets */}
+                        <Route index element={<Dashboard />} />
+                        {/* Other routes become children of AppLayout */}
+                        <Route path="all-assets" element={<MasterView user={user} setExpiringItems={setExpiringItems} />} />
                         <Route path="in-stock" element={<InStockView user={user} />} />
                         <Route path="in-use" element={<InUse user={user} />} />
                         <Route path="damaged" element={<DamagedProducts user={user} />} />
@@ -126,7 +124,6 @@ const App = () => {
                                 : <Navigate to="/" />
                             }
                         />
-
                         {/* Fallback to Dashboard for any unknown paths for authenticated users */}
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
