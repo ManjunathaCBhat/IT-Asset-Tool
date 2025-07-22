@@ -55,11 +55,7 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
     // Define menu items based on user role
       const menuItems = [
         { key: '/', icon: <DatabaseOutlined />, label: <Link to="/">Dashboard</Link> }, // <--- NEW DASHBOARD LINK
-        { key: '/all-assets', icon: <DatabaseOutlined />, label: <Link to="/all-assets">All Assets</Link> }, // <--- UPDATED PATH FOR MASTER VIEW
-        { key: '/in-stock', icon: <CheckCircleOutlined />, label: <Link to="/in-stock">In Stock</Link> },
-        { key: '/in-use', icon: <ToolOutlined />, label: <Link to="/in-use">In Use</Link> },
-        { key: '/damaged', icon: <WarningOutlined />, label: <Link to="/damaged">Damaged Products</Link> },
-        { key: '/e-waste', icon: <DeleteOutlined />, label: <Link to="/e-waste">E-Waste</Link> },
+        
     ];
 
     if (user?.role === 'Admin' || user?.role === 'Editor') {

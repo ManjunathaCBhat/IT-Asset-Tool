@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { message } from 'antd'; // Using Ant Design's message for consistency in feedback
+import { useNavigate } from 'react-router-dom';
 
 // REMOVE THE PREVIOUS LOGO IMPORT LINE AND THE MISPLACED JSX BLOCK:
 // import CirrusLabsLogo from '.public\C_lab logo.png'; // <--- This line is wrong
@@ -15,11 +16,12 @@ import { message } from 'antd'; // Using Ant Design's message for consistency in
 const LoginPage = ({ onLogin }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [forgotEmailSent, setForgotEmailSent] = useState(false);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const canvasRef = useRef(null);
     const mouse = useRef({ x: null, y: null, radius: 150 }); // Mouse interaction for particles
-
+    const navigate = useNavigate();
     // This useEffect hook will handle the entire canvas animation.
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -159,10 +161,51 @@ const LoginPage = ({ onLogin }) => {
         };
     }, []); // Empty dependency array means this runs once on mount
 
+
+     const handleForgotPassword = async () => {
+  if (!email) {
+    message.warning("Please enter your email address.");
+    return;
+  }
+
+  // Very basic email format validation
+  const emailRegex = /\S+@\S+\.\S+/;
+  if (!emailRegex.test(email)) {
+    message.warning("Please enter a valid email address.");
+    return;
+  }
+
+  try {
+    const response = await fetch("http://localhost:5000/api/forgot-password", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ email })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      setForgotEmailSent(true);
+      message.success("Reset email sent. Check your inbox.");
+      setTimeout(() => setForgotEmailSent(false), 5000);
+    } else {
+      setForgotEmailSent(false);
+      message.error(data.message || "Failed to send reset email.");
+    }
+  } catch (error) {
+    console.error("Error:", error);
+    setForgotEmailSent(false);
+    message.error("Something went wrong. Please try again later.");
+  }
+};
+
     const handleLogin = async (e) => {
         e.preventDefault();
         setIsLoading(true);
         setError('');
+
         try {
             const response = await axios.post('http://localhost:5000/api/users/login', { email, password });
             message.success('Login Successful!');
@@ -238,7 +281,21 @@ const LoginPage = ({ onLogin }) => {
                     <form onSubmit={handleLogin}>
                         <div style={{ marginBottom: '1rem' }}>
                             <label htmlFor="email" style={labelStyle}>Email Address</label>
-                            <input type="email" id="email" style={inputStyle} value={email} onChange={e => setEmail(e.target.value)} required />
+                            <input
+  type="email"
+  value={email}
+  onChange={(e) => setEmail(e.target.value)}
+  placeholder="Enter your email"
+  required
+  style={{
+    padding: '10px',
+    width: '100%',
+    marginBottom: '10px',
+    borderRadius: '4px',
+    border: '1px solid #ccc'
+  }}
+/>
+
                         </div>
                         <div>
                             <label htmlFor="password" style={labelStyle}>Password</label>
@@ -248,6 +305,25 @@ const LoginPage = ({ onLogin }) => {
                         <button type="submit" style={buttonStyle} disabled={isLoading}>
                             {isLoading ? 'Signing In...' : 'Sign In'}
                         </button>
+
+                        <button
+  type="button"
+  onClick={() => navigate('/reset-password')}
+  style={{
+    background: 'none',
+    color: '#296bd5ff',
+    border: 'none',
+    cursor: 'pointer',
+    marginTop: '1rem'
+  }}
+>
+  Forgot Password?
+</button>
+
+
+                            {forgotEmailSent && (
+                                <div style={{ color: '#296bd5ff', margin: '6px 0' }}>Reset email sent. Check your inbox.</div>
+                            )}
                     </form>
                 </div>
             </div>
