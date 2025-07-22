@@ -15,9 +15,9 @@ app.use(cors());
 app.use(express.json()); // For parsing application/json
 
 // --- Database Connection ---
-const MONGO_URI = process.env.mongo_uri;
+const MONGO_URI = process.env.MONGO_URI;
 // --- JWT Secret ---
-const JWT_SECRET = process.env.jwt_secret;
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // --- Mongoose Schemas ---
 const UserSchema = new mongoose.Schema({
