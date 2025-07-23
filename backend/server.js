@@ -176,7 +176,7 @@ app.post('/api/forgot-password', async (req, res) => {
     }
 });
 
-, async (req, res) => {
+app.post('/api/reset-password', async (req, res) => {
      console.log('Reset password request body:', req.body);
     const { email, token, newPassword } = req.body;
   try {
