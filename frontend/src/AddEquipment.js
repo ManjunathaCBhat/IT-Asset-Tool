@@ -149,6 +149,7 @@ const AddEquipment = () => {
                                     rules={[{
                                         type: 'number',
                                         required: false, 
+
                                     }]}
                                 >
                                     <Input type="number" step="0.01" placeholder="e.g., 25000.00" />

@@ -302,10 +302,15 @@ app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res
         res.status(500).json({ message: err.message });
     }
 });
+// Import express, mongoose, models, etc. (already done)
+
+// Your existing route handlers here...
+
+// Add this grouped-by-email route after other equipment endpoints
 app.get('/api/equipment/grouped-by-email', auth, async (req, res) => {
   try {
     const groupedData = await Equipment.aggregate([
-      { $match: { status: "In Use", isDeleted: { $ne: true } } }, // Only non-deleted In Use assets
+      { $match: { status: "In Use", isDeleted: { $ne: true } } },
       {
         $group: {
           _id: "$employeeEmail",
@@ -316,10 +321,11 @@ app.get('/api/equipment/grouped-by-email', auth, async (req, res) => {
     ]);
     res.json(groupedData);
   } catch (error) {
-    console.error('Error fetching grouped assets by email:', error);
-    res.status(500).json({ message: 'Server Error' });
+    console.error("Error in grouped-by-email aggregation:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
+
 
 // --- Server Start ---
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
