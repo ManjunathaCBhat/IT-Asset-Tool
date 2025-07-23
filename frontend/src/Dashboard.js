@@ -1,72 +1,131 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Card, Col, Row, Statistic, Typography, List, Button, Spin, Alert, Table, Tag, Input, Space } from 'antd';
+import { Card, Col, Row, Statistic, Typography, Spin, Alert, Button, Space, List } from 'antd';
 import {
     DatabaseOutlined, CheckCircleOutlined, ToolOutlined, WarningOutlined, DeleteOutlined,
-    PlusOutlined, SearchOutlined
+    LaptopOutlined, DesktopOutlined,
+    AudioOutlined, BlockOutlined, // Corrected imports for Headset and Mouse (generic)
 } from '@ant-design/icons';
-import { Link } from 'react-router-dom';
+// Removed useNavigate as the + button is removed and no longer redirects
+// import { useNavigate } from 'react-router-dom'; // No longer needed
 import axios from 'axios';
-import moment from 'moment'; // Import moment for date formatting and sorting
+import moment from 'moment';
 
 const { Title, Text } = Typography;
 
-// Helper functions (could be moved to a utils file)
+// Helper function for status colors (keep this consistent with AppLayout)
 const getStatusColor = (status) => {
-    const colors = { 'In Use': '#7ED321', 'In Stock': '#4A90E2', 'Damaged': '#D0021B', 'E-Waste': '#8B572A' };
-    return colors[status] || 'default'; // Use hex codes for background color
+    const colors = {
+        'In Use': '#7ED321',
+        'In Stock': '#FA8C16', // Orange
+        'Damaged': '#D0021B', // Red
+        'E-Waste': '#8B572A'  // Brown
+    };
+    return colors[status] || 'rgba(0, 0, 0, 0.85)'; // Default text color if no specific color is found
 };
 
-const getWarrantyTag = (date) => {
-    if (!date) return <Text disabled>N/A</Text>;
+// --- Helper function for grouping and counting by category ---
+const summarizeByCategory = (assets) => {
+    const categorySummary = {};
 
-    const warrantyDate = moment(date); // Moment automatically handles various date string formats
-    if (!warrantyDate.isValid()) return <Text disabled>Invalid Date</Text>;
+    assets.forEach(asset => {
+        const category = asset.category || 'Uncategorized';
+        if (!categorySummary[category]) {
+            categorySummary[category] = {
+                category: category,
+                inUse: 0,
+                inStock: 0,
+                damaged: 0,
+                eWaste: 0,
+                total: 0 // Keep total for (Total) in card title
+            };
+        }
 
-    const today = moment();
-    const thirtyDaysFromNow = moment().add(30, 'days');
+        switch (asset.status) {
+            case 'In Use':
+                categorySummary[category].inUse++;
+                break;
+            case 'In Stock':
+                categorySummary[category].inStock++;
+                break;
+            case 'Damaged':
+                categorySummary[category].damaged++;
+                break;
+            case 'E-Waste':
+                categorySummary[category].eWaste++;
+                break;
+            default:
+                // For statuses not explicitly mapped, they won't be displayed on the card
+                // but will still contribute to the 'total' for the category
+                break;
+        }
+        categorySummary[category].total++;
+    });
 
-    if (warrantyDate.isBefore(today, 'day')) { // 'day' to compare just the date part
-        return <Tag color="error">Expired: {warrantyDate.format('DD MMM YYYY')}</Tag>;
-    }
-    if (warrantyDate.isBefore(thirtyDaysFromNow, 'day')) {
-        return <Tag color="warning">Expires: {warrantyDate.format('DD MMM YYYY')}</Tag>;
-    }
-    return warrantyDate.format('DD MMM YYYY');
+    // Explicitly add desired categories to ensure they always show up, even with 0 items.
+    const desiredCategories = ['Laptop', 'Headset', 'Mouse', 'Monitor', 'Uncategorized'];
+    desiredCategories.forEach(cat => {
+        if (!categorySummary[cat]) {
+            categorySummary[cat] = {
+                category: cat,
+                inUse: 0,
+                inStock: 0,
+                damaged: 0,
+                eWaste: 0,
+                total: 0
+            };
+        }
+    });
+
+    return Object.values(categorySummary).sort((a, b) => a.category.localeCompare(b.category));
 };
+
+// Helper to get icon based on category name
+const getCategoryIcon = (category) => {
+    switch (category) {
+        case 'Computer': // Keep Computer as it might be a general category name in your data
+        case 'Laptop':
+            return <LaptopOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />; // Blue
+        case 'Headset':
+            return <AudioOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />; // Audio icon
+        case 'Mouse':
+            return <BlockOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />; // Generic block/device icon
+        case 'Monitor':
+            return <DesktopOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />; // Desktop/Monitor icon
+        default:
+            return <DatabaseOutlined style={{ fontSize: '48px', color: '#888' }} />; // Generic icon for others/uncategorized
+    }
+};
+
 
 const Dashboard = () => {
     const [summaryData, setSummaryData] = useState({
         totalAssets: 0,
         inUse: 0,
-        available: 0,
+        inStock: 0,
         damaged: 0,
         eWaste: 0,
     });
-    const [allAssets, setAllAssets] = useState([]); // All assets fetched from API
-    const [filteredAssets, setFilteredAssets] = useState([]); // Assets currently displayed in table
-    const [activeFilter, setActiveFilter] = useState('All'); // 'All', 'In Use', 'In Stock', 'Damaged', 'E-Waste'
+    const [categoryAssetSummaries, setCategoryAssetSummaries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [searchText, setSearchText] = useState('');
-    const [searchedColumn, setSearchedColumn] = useState('');
+
+    // Removed useNavigate as the + button is removed
 
     const getAuthHeader = useCallback(() => {
         const token = localStorage.getItem('token');
         return token ? { 'x-auth-token': token } : {};
     }, []);
 
-    const fetchAllData = useCallback(async () => {
+    const fetchDashboardData = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            // Fetch summary counts
             const summaryRes = await axios.get('http://localhost:5000/api/equipment/summary', { headers: getAuthHeader() });
-            const fetchedSummary = summaryRes.data;
-            setSummaryData(fetchedSummary);
+            setSummaryData(prev => ({ ...prev, ...summaryRes.data, inStock: summaryRes.data.inStock || summaryRes.data.available || 0 }));
 
-            // Fetch ALL assets for client-side filtering
-            const assetsRes = await axios.get('http://localhost:5000/api/equipment', { headers: getAuthHeader() });
-            setAllAssets(assetsRes.data);
+            const allAssetsRes = await axios.get('http://localhost:5000/api/equipment', { headers: getAuthHeader() });
+            const groupedSummary = summarizeByCategory(allAssetsRes.data);
+            setCategoryAssetSummaries(groupedSummary);
 
         } catch (err) {
             console.error('Failed to fetch dashboard data:', err);
@@ -77,225 +136,18 @@ const Dashboard = () => {
     }, [getAuthHeader]);
 
     useEffect(() => {
-        fetchAllData();
-    }, [fetchAllData]);
+        fetchDashboardData();
+    }, [fetchDashboardData]);
 
-    // Effect for filtering assets based on activeFilter or search text
-    useEffect(() => {
-        let currentFiltered = allAssets;
-
-        // Apply status filter
-        if (activeFilter !== 'All') {
-            currentFiltered = currentFiltered.filter(asset => asset.status === activeFilter);
-        }
-
-        // Apply search filter (if searchText is not empty)
-        if (searchText) {
-            currentFiltered = currentFiltered.filter(asset =>
-                Object.keys(asset).some(key =>
-                    String(asset[key]).toLowerCase().includes(searchText.toLowerCase())
-                )
-            );
-        }
-
-        setFilteredAssets(currentFiltered);
-    }, [allAssets, activeFilter, searchText]);
-
-
-    // --- Table Column Search Functionality ---
-    const handleSearch = (selectedKeys, confirm, dataIndex) => {
-        confirm();
-        setSearchText(selectedKeys[0]);
-        setSearchedColumn(dataIndex);
-    };
-
-    const handleReset = (clearFilters) => {
-        clearFilters();
-        setSearchText('');
-    };
-
-    const getColumnSearchProps = (dataIndex) => ({
-        filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
-            <div style={{ padding: 8 }}>
-                <Input
-                    placeholder={`Search ${dataIndex}`}
-                    value={selectedKeys[0]}
-                    onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
-                    onPressEnter={() => handleSearch(selectedKeys, confirm, dataIndex)}
-                    style={{ marginBottom: 8, display: 'block' }}
-                />
-                <Space>
-                    <Button
-                        type="primary"
-                        onClick={() => handleSearch(selectedKeys, confirm, dataIndex)}
-                        icon={<SearchOutlined />}
-                        size="small"
-                        style={{ width: 90 }}
-                    >
-                        Search
-                    </Button>
-                    <Button onClick={() => clearFilters && handleReset(clearFilters)} size="small" style={{ width: 90 }}>
-                        Reset
-                    </Button>
-                </Space>
-            </div>
-        ),
-        filterIcon: (filtered) => <SearchOutlined style={{ color: filtered ? '#1890ff' : undefined }} />,
-        onFilter: (value, record) =>
-            record[dataIndex] ? String(record[dataIndex]).toLowerCase().includes(value.toLowerCase()) : '',
-        onFilterDropdownOpenChange: (visible) => {
-            // if (visible) { setTimeout(() => searchInput.select(), 100); } // Re-add if you have searchInput ref
-        },
-        render: (text) =>
-            searchedColumn === dataIndex ? (
-                <Text mark>{text}</Text>
-            ) : (
-                text
-            ),
-    });
-
-    // --- Table Columns Definition ---
-    const dashboardTableColumns = [
-        {
-            title: 'SI No.',
-            key: 'siNo',
-            render: (text, record, index) => index + 1,
-            width: 70,
-            fixed: 'left',
-        },
-        {
-            title: 'Asset ID',
-            dataIndex: 'assetId',
-            key: 'assetId',
-            ...getColumnSearchProps('assetId'),
-            sorter: (a, b) => a.assetId.localeCompare(b.assetId),
-            width: 120,
-        },
-        {
-            title: 'Category',
-            dataIndex: 'category',
-            key: 'category',
-            ...getColumnSearchProps('category'),
-            sorter: (a, b) => a.category.localeCompare(b.category),
-            width: 150,
-        },
-        {
-            title: 'Model',
-            dataIndex: 'model',
-            key: 'model',
-            ...getColumnSearchProps('model'),
-            sorter: (a, b) => a.model.localeCompare(b.model),
-            width: 180,
-        },
-        {
-            title: 'Serial Number',
-            dataIndex: 'serialNumber',
-            key: 'serialNumber',
-            ...getColumnSearchProps('serialNumber'),
-            width: 150,
-        },
-        {
-            title: 'Warranty Expiry',
-            dataIndex: 'warrantyInfo',
-            key: 'warrantyInfo',
-            render: (date) => getWarrantyTag(date),
-            sorter: (a, b) => moment(a.warrantyInfo).unix() - moment(b.warrantyInfo).unix(),
-            width: 150,
-        },
-        {
-            title: 'Location',
-            dataIndex: 'location',
-            key: 'location',
-            ...getColumnSearchProps('location'),
-            width: 150,
-        },
-        {
-            title: 'Comments',
-            dataIndex: 'comment',
-            key: 'comment',
-            ellipsis: true,
-            width: 200,
-        },
-        // Conditional columns based on activeFilter (for clarity, all relevant columns are defined, but their values might be null)
-        {
-            title: 'Assignee Name',
-            dataIndex: 'assigneeName',
-            key: 'assigneeName',
-            ...getColumnSearchProps('assigneeName'),
-            width: 150,
-            // render: (text) => activeFilter === 'In Use' ? text : 'N/A', // Can apply this if you want to hide data for other statuses
-        },
-        {
-            title: 'Employee Email',
-            dataIndex: 'employeeEmail',
-            key: 'employeeEmail',
-            ...getColumnSearchProps('employeeEmail'),
-            width: 180,
-            // render: (text) => activeFilter === 'In Use' ? text : 'N/A',
-        },
-        {
-            title: 'Department',
-            dataIndex: 'department',
-            key: 'department',
-            ...getColumnSearchProps('department'),
-            width: 150,
-            // render: (text) => activeFilter === 'In Use' ? text : 'N/A',
-        },
-        {
-            title: 'Damage Description',
-            dataIndex: 'damageDescription',
-            key: 'damageDescription',
-            ...getColumnSearchProps('damageDescription'),
-            ellipsis: true,
-            width: 200,
-            // render: (text) => activeFilter === 'Damaged' ? text : 'N/A',
-        },
-        {
-            title: 'Status', // Always show status, just filter by it
-            dataIndex: 'status',
-            key: 'status',
-            render: (status) => (
-                <Tag color={getStatusColor(status)} style={{color: '#fff', borderColor: getStatusColor(status)}}>
-                    {status ? status.toUpperCase() : ''}
-                </Tag>
-            ),
-            filters: [
-                { text: 'In Use', value: 'In Use' },
-                { text: 'In Stock', value: 'In Stock' },
-                { text: 'Damaged', value: 'Damaged' },
-                { text: 'E-Waste', value: 'E-Waste' },
-            ],
-            onFilter: (value, record) => record.status === value,
-            sorter: (a, b) => a.status.localeCompare(b.status),
-            width: 120,
-            fixed: 'right',
-        },
-    ];
-
-
-    // Button styles for status filters
-    const filterButtonStyle = (status) => ({
-        width: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '40px',
-        fontSize: '14px',
-        marginBottom: '10px',
-        backgroundColor: activeFilter === status ? getStatusColor(status) : '#f0f2f5', // Highlight active
-        color: activeFilter === status ? '#fff' : 'rgba(0, 0, 0, 0.85)',
-        borderColor: getStatusColor(status),
-        // Adding hover styles via inline style is tricky, AntD handles this normally
-        // We ensure the background color and text color are set for active state
-        // For inactive, default AntD button styles apply
-    });
-
+    // Removed handleAddCategoryAsset function
 
     return (
         <div style={{ padding: '24px', background: '#f0f2f5', minHeight: '100%' }}>
-            <Title level={3} style={{ marginBottom: '24px' }}>Dashboard</Title>
+            {error && <Alert message="Error" description={error} type="error" showIcon style={{ marginBottom: '20px' }} />}
 
-            {/* Top Row for Summary Statistics */}
+            <Title level={3} style={{ marginBottom: '24px' }}>Dashboard Overview</Title>
+
+            {/* Top Row for Overall Summary Statistics */}
             <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
                 <Col xs={24} sm={12} md={8} lg={6} xl={4}>
                     <Card>
@@ -319,8 +171,8 @@ const Dashboard = () => {
                     <Card>
                         <Statistic
                             title="In Stock"
-                            value={summaryData.available} // Renamed from "Available" to "In Stock" to match common terminology
-                            prefix={<CheckCircleOutlined style={{ color: '#F5A623' }} />}
+                            value={summaryData.inStock}
+                            prefix={<CheckCircleOutlined style={{ color: '#FA8C16' }} />}
                         />
                     </Card>
                 </Col>
@@ -342,70 +194,68 @@ const Dashboard = () => {
                         />
                     </Card>
                 </Col>
-                {/* Total Value / Cost Removed as per request */}
             </Row>
 
-            {/* Quick Actions / Filter Buttons */}
-            <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-                <Col xs={24} sm={12} md={6} lg={4}>
-                    <Button
-                        style={{...filterButtonStyle('All'), backgroundColor: activeFilter === 'All' ? '#1890ff' : '#f0f2f5', color: activeFilter === 'All' ? '#fff' : 'rgba(0, 0, 0, 0.85)', borderColor: '#1890ff'}}
-                        onClick={() => setActiveFilter('All')}
-                    >
-                        <DatabaseOutlined style={{ marginRight: 8 }} /> All Assets
-                    </Button>
-                </Col>
-                <Col xs={24} sm={12} md={6} lg={4}>
-                    <Button
-                        style={{...filterButtonStyle('In Use'), backgroundColor: activeFilter === 'In Use' ? getStatusColor('In Use') : '#f0f2f5', color: activeFilter === 'In Use' ? '#fff' : 'rgba(0, 0, 0, 0.85)'}}
-                        onClick={() => setActiveFilter('In Use')}
-                    >
-                        <ToolOutlined style={{ marginRight: 8 }} /> In Use
-                    </Button>
-                </Col>
-                <Col xs={24} sm={12} md={6} lg={4}>
-                    <Button
-                        style={{...filterButtonStyle('In Stock'), backgroundColor: activeFilter === 'In Stock' ? getStatusColor('In Stock') : '#f0f2f5', color: activeFilter === 'In Stock' ? '#fff' : 'rgba(0, 0, 0, 0.85)'}}
-                        onClick={() => setActiveFilter('In Stock')}
-                    >
-                        <CheckCircleOutlined style={{ marginRight: 8 }} /> In Stock
-                    </Button>
-                </Col>
-                <Col xs={24} sm={12} md={6} lg={4}>
-                    <Button
-                        style={{...filterButtonStyle('Damaged'), backgroundColor: activeFilter === 'Damaged' ? getStatusColor('Damaged') : '#f0f2f5', color: activeFilter === 'Damaged' ? '#fff' : 'rgba(0, 0, 0, 0.85)'}}
-                        onClick={() => setActiveFilter('Damaged')}
-                    >
-                        <WarningOutlined style={{ marginRight: 8 }} /> Damaged
-                    </Button>
-                </Col>
-                <Col xs={24} sm={12} md={6} lg={4}>
-                    <Button
-                        style={{...filterButtonStyle('E-Waste'), backgroundColor: activeFilter === 'E-Waste' ? getStatusColor('E-Waste') : '#f0f2f5', color: activeFilter === 'E-Waste' ? '#fff' : 'rgba(0, 0, 0, 0.85)'}}
-                        onClick={() => setActiveFilter('E-Waste')}
-                    >
-                        <DeleteOutlined style={{ marginRight: 8 }} /> E-Waste
-                    </Button>
-                </Col>
-                <Col xs={24} sm={12} md={6} lg={4}>
-                    <Link to="/add">
-                        <Button type="primary" icon={<PlusOutlined />} style={{ width: '100%', height: '40px', fontSize: '14px', backgroundColor: '#1890ff', borderColor: '#1890ff' }}>
-                            Add New Asset
-                        </Button>
-                    </Link>
-                </Col>
-            </Row>
+            <Title level={4} style={{ marginBottom: '24px', marginTop: '32px' }}>Assets by Category</Title>
 
-            {/* Asset Table */}
-            <Card title={<Title level={4}>Asset List ({activeFilter})</Title>} style={{ marginTop: '24px' }}>
-                <Table
-                    columns={dashboardTableColumns}
-                    dataSource={filteredAssets.map((item, index) => ({ ...item, key: item._id || index }))}
-                    pagination={{ pageSize: 10 }}
-                    scroll={{ x: 'max-content' }}
-                    loading={loading}
+            {loading ? (
+                <div style={{ textAlign: 'center', padding: '50px' }}>
+                    <Spin size="large" tip="Loading Categories..." />
+                </div>
+            ) : categoryAssetSummaries.length === 0 ? (
+                <Alert
+                    message="No Asset Categories Found"
+                    description="It looks like there are no assets categorized yet or data is not available."
+                    type="info"
+                    showIcon
                 />
-            </Card>
+            ) : (
+                <Row gutter={[16, 16]}>
+                    {categoryAssetSummaries.map((categoryData) => (
+                        <Col key={categoryData.category} xs={24} sm={12} md={8} lg={6} xl={4}>
+                            <Card
+                                title={
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        {/* Combined Category Name and Total Count like "Computer (32)" */}
+                                        <Text strong style={{ fontSize: '16px' }}>
+                                            {categoryData.category} ({categoryData.total})
+                                        </Text>
+                                        {/* Removed + Button from here */}
+                                    </div>
+                                }
+                                hoverable
+                                bodyStyle={{ padding: '16px' }}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+                                    <div style={{ width: '40%', display: 'flex', justifyContent: 'center' }}>
+                                        {getCategoryIcon(categoryData.category)}
+                                    </div>
+                                    <List
+                                        itemLayout="horizontal"
+                                        dataSource={[
+                                            { label: 'In Use', count: categoryData.inUse, color: getStatusColor('In Use') },
+                                            { label: 'In Stock', count: categoryData.inStock, color: getStatusColor('In Stock') },
+                                            { label: 'Damaged', count: categoryData.damaged, color: getStatusColor('Damaged') },
+                                            { label: 'E-Waste', count: categoryData.eWaste, color: getStatusColor('E-Waste') }, // Directly using E-Waste
+                                        ]}
+                                        renderItem={item => (
+                                            <List.Item style={{ padding: '4px 0', borderBottom: 'none' }}>
+                                                <List.Item.Meta
+                                                    title={<Text style={{ color: item.color, fontSize: '12px' }}>{item.label}</Text>}
+                                                />
+                                                <div>
+                                                    <Text style={{ fontWeight: 'bold', fontSize: '12px', color: item.color }}>{item.count}</Text>
+                                                </div>
+                                            </List.Item>
+                                        )}
+                                        style={{ padding: 0, width: '60%' }}
+                                    />
+                                </div>
+                            </Card>
+                        </Col>
+                    ))}
+                </Row>
+            )}
         </div>
     );
 };
