@@ -302,7 +302,24 @@ app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res
         res.status(500).json({ message: err.message });
     }
 });
-
+app.get('/api/equipment/grouped-by-email', auth, async (req, res) => {
+  try {
+    const groupedData = await Equipment.aggregate([
+      { $match: { status: "In Use", isDeleted: { $ne: true } } }, // Only non-deleted In Use assets
+      {
+        $group: {
+          _id: "$employeeEmail",
+          assets: { $push: "$$ROOT" },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    res.json(groupedData);
+  } catch (error) {
+    console.error('Error fetching grouped assets by email:', error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+});
 
 // --- Server Start ---
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

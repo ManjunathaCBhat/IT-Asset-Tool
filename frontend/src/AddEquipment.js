@@ -148,8 +148,7 @@ const AddEquipment = () => {
                                     label="Purchase Price (INR)"
                                     rules={[{
                                         type: 'number',
-                                        transform: (value) => parseFloat(value),
-                                        message: 'Please enter a valid number',
+                                        required: false, 
                                     }]}
                                 >
                                     <Input type="number" step="0.01" placeholder="e.g., 25000.00" />

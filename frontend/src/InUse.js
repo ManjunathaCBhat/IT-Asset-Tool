@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import {
     Table, Tag, Typography, Modal, Button, Space, Form, Input, Select,
-    DatePicker, Row, Col, message, Dropdown, Menu
+    DatePicker, Row, Col, message, Dropdown, Menu // Removed Popconfirm as it's not needed for new flow
 } from 'antd';
 import {
     SearchOutlined, EyeOutlined, RollbackOutlined,
@@ -38,15 +38,15 @@ const InUse = () => {
     // State for Generic Status Change Modals (Return, Damage, E-Waste)
     const [isStatusChangeModalVisible, setIsStatusChangeModalVisible] = useState(false);
     const [assetForStatusChange, setAssetForStatusChange] = useState(null);
-    const [targetStatus, setTargetStatus] = useState(''); // 'In Stock', 'Damaged', 'E-Waste'
+    const [targetStatus, setTargetStatus] = useState('');
     const [statusChangeForm] = Form.useForm();
 
-    const getAuthHeader = useCallback(() => {
+    const getAuthHeader = useCallback(() => { // Added useCallback for stability
         const token = localStorage.getItem('token');
         return token ? { 'x-auth-token': token } : {};
     }, []);
 
-    const fetchInUseAssets = useCallback(async () => {
+    const fetchInUseAssets = useCallback(async () => { // Added useCallback for stability
         try {
             const response = await axios.get('http://localhost:5000/api/equipment', { headers: getAuthHeader() });
             const inUseAssets = response.data.filter(item => item.status === 'In Use');
@@ -56,11 +56,11 @@ const InUse = () => {
             console.error('Error fetching In Use assets:', error.response ? error.response.data : error.message);
             message.error('Failed to fetch In Use assets.');
         }
-    }, [getAuthHeader]);
+    }, [getAuthHeader]); // Dependency for useCallback
 
     useEffect(() => {
         fetchInUseAssets();
-    }, [fetchInUseAssets]);
+    }, [fetchInUseAssets]); // Dependency for useEffect
 
     const handleSearch = (e) => {
         const value = e.target.value;
@@ -127,13 +127,11 @@ const InUse = () => {
         setAssetForStatusChange(record);
         setTargetStatus(status);
         statusChangeForm.setFieldsValue({
-            // Pre-fill all fields (will be readOnly)
-            ...record,
-            // Ensure date fields are moment objects for DatePicker (even if readOnly)
+            ...record, // Pre-fill all fields (will be readOnly)
+            // Ensure date fields are moment objects for DatePicker
             warrantyInfo: record.warrantyInfo ? moment(record.warrantyInfo) : null,
             purchaseDate: record.purchaseDate ? moment(record.purchaseDate) : null,
-            // Comment is editable, pre-fill with existing comment
-            comment: record.comment || '',
+            comment: record.comment || '', // Only comment is editable
         });
         setIsStatusChangeModalVisible(true);
     };
@@ -146,66 +144,49 @@ const InUse = () => {
     };
 
     const handleConfirmStatusChange = async () => {
-        if (!assetForStatusChange?._id) {
-            message.error("No asset selected for status change.");
-            console.error("Error: assetForStatusChange._id is null or undefined.");
-            return;
-        }
-
         try {
-            // Validate only the 'comment' field. If it's empty and should be required, AntD will show inline error.
-            const values = await statusChangeForm.validateFields();
-            const newComment = values.comment; // Get the potentially updated comment from the form
+            const values = await statusChangeForm.validateFields(); // Validate only the editable fields (comment)
 
             const updatePayload = {
                 status: targetStatus,
-                comment: newComment, // Use the comment from the form
+                comment: values.comment, // Always update comment from the form
             };
 
-            // If the asset was damaged and is now changing status, clear damageDescription on backend
-            // assuming your backend clears this if it's not provided or null for non-damaged statuses.
-            // If backend needs explicit null, include: damageDescription: null
+            // Remove damageDescription if it's not relevant to the new status
+            // Assuming backend logic will clear or handle it if not provided for certain statuses
             if (assetForStatusChange.status === 'Damaged' && targetStatus !== 'Damaged') {
-                updatePayload.damageDescription = null; // Explicitly clear if moving from Damaged
+                 // Explicitly set to null/undefined if changing from Damaged status
+                 // and the target status is not Damaged.
+                 // This depends on your backend schema: is it optional or do you need to send null?
+                updatePayload.damageDescription = null; // or undefined;
             }
-
 
             Modal.confirm({
                 title: 'Confirm Status Change',
-                content: `Are you sure you want to change the status of ${assetForStatusChange.model} (S/N: ${assetForStatusChange.serialNumber}) to '${targetStatus}'?`,
+                content: `Are you sure you want to change the status of ${assetForStatusChange.model} (${assetForStatusChange.serialNumber}) to '${targetStatus}'?`,
                 okText: `Yes, ${targetStatus === 'In Stock' ? 'Returned' : 'Confirm'}`,
                 cancelText: 'No',
                 onOk: async () => {
-                    console.log(`Attempting to update asset ${assetForStatusChange._id} to status: ${targetStatus} with comment: "${newComment}"`);
-                    console.log('Update payload being sent:', updatePayload);
-
                     try {
-                        const response = await axios.put(
-                            `http://localhost:5000/api/equipment/${assetForStatusChange._id}`,
-                            updatePayload,
-                            { headers: getAuthHeader() }
-                        );
-                        console.log('API Response received:', response.data);
+                        console.log('Sending update payload:', updatePayload); // Debugging payload
+                        const response = await axios.put(`http://localhost:5000/api/equipment/${assetForStatusChange._id}`, updatePayload, { headers: getAuthHeader() });
+                        console.log('API Response:', response.data); // Debugging response
                         message.success(`Asset successfully moved to '${targetStatus}'!`);
                         setIsStatusChangeModalVisible(false);
                         statusChangeForm.resetFields();
-                        fetchInUseAssets(); // Re-fetch data to update the table
+                        fetchInUseAssets(); // Re-fetch data
                     } catch (error) {
-                        console.error(`API Error updating asset status to ${targetStatus}:`, error.response ? error.response.data : error.message);
-                        message.error(`Failed to update asset status to '${targetStatus}'. Check console for details.`);
-                        // Optional: if error.response.data contains a user-friendly message, display that.
-                        if (error.response && error.response.data && error.response.data.message) {
-                            message.error(`Error: ${error.response.data.message}`);
-                        }
+                        console.error(`Failed to update asset status to ${targetStatus}:`, error.response ? error.response.data : error.message);
+                        message.error(`Failed to update asset status to '${targetStatus}'. Please check backend for details.`);
                     }
                 },
                 onCancel() {
-                    console.log('Status change confirmation cancelled by user.');
+                    console.log('Status change cancelled by user in confirmation.');
                 },
             });
-        } catch (errorInfo) {
-            console.warn('Form validation failed or error during confirmation setup:', errorInfo);
-            // Ant Design's Form.validateFields() will display inline errors, so no general message.error is needed here.
+        } catch (errorInfo) { // Catch validation errors specifically
+            console.warn('Status change form validation failed:', errorInfo);
+            // message.error('Please fill in required fields.'); // This is now handled by AntD's inline validation messages
         }
     };
 
@@ -258,7 +239,7 @@ const InUse = () => {
                         type="primary"
                         icon={<RollbackOutlined />}
                         style={{ backgroundColor: getStatusColor('In Stock'), borderColor: getStatusColor('In Stock') }}
-                        onClick={() => openStatusChangeModal(record, 'In Stock')} // Trigger Return flow
+                        onClick={() => openStatusChangeModal(record, 'In Stock')}
                     >
                         Return
                     </Button>
@@ -330,13 +311,14 @@ const InUse = () => {
                     <Button key="back" onClick={handleCancelEditView}>Cancel</Button>,
                     <Button key="submit" type="primary" onClick={handleSaveEditView}>Save</Button>,
                 ]}
-                width={1000} // Increased width
+                width={1000} // Increased width for more horizontal space
                 centered
-                // Removed explicit body styling for scrollbars
+                // Removed max-height/overflowY from modal body to allow horizontal extension
+                // styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
             >
                 <Form form={editViewForm} layout="vertical">
                     <Row gutter={16}>
-                        {/* Fields arranged to be wider */}
+                        {/* Use span={8} for 3 columns per row, or span={6} for 4 columns if fields are short */}
                         <Col span={8}><Form.Item name="assetId" label="Asset ID"><Input readOnly={isViewOnlyModal} /></Form.Item></Col>
                         <Col span={8}><Form.Item name="category" label="Category" rules={[{ required: true }]}><Input readOnly={isViewOnlyModal} /></Form.Item></Col>
                         <Col span={8}><Form.Item name="model" label="Model" rules={[{ required: true }]}><Input readOnly={isViewOnlyModal} /></Form.Item></Col>
@@ -346,7 +328,7 @@ const InUse = () => {
                         <Col span={8}><Form.Item name="employeeEmail" label="Email" rules={[{ required: true, type: 'email' }]}><Input readOnly={isViewOnlyModal} /></Form.Item></Col>
                         <Col span={8}><Form.Item name="phoneNumber" label="Phone Number" rules={[{ required: true, pattern: /^\d{10}$/, message: 'Phone number must be exactly 10 digits' }]}><Input readOnly={isViewOnlyModal} /></Form.Item></Col>
                         <Col span={8}><Form.Item name="department" label="Department" rules={[{ required: true }]}><Input readOnly={isViewOnlyModal} /></Form.Item></Col>
-                        <Col span={8}><Form.Item name="location" label="Location"><Input readOnly={isViewOnlyModal} /></Form.Item></Col>
+                        <Col span={8}><Form.Item name="location" label="Location"><Input readOnly={isViewOnlyModal} /></Form.Item></Col> {/* Added Location */}
                         <Col span={8}><Form.Item name="purchaseDate" label="Purchase Date"><DatePicker style={{ width: '100%' }} disabled={isViewOnlyModal} /></Form.Item></Col>
                         <Col span={8}><Form.Item name="warrantyInfo" label="Warranty Expiry" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} disabled={isViewOnlyModal} /></Form.Item></Col>
                         <Col span={8}>
@@ -359,14 +341,15 @@ const InUse = () => {
                                 </Select>
                             </Form.Item>
                         </Col>
-                        {/* damageDescription is part of the original data, but might be cleared if status changes */}
+                        {/* damageDescription should only be present if current status is Damaged or selected to be damaged */}
                         {selectedAsset?.status === 'Damaged' || (editViewForm.getFieldValue('status') === 'Damaged' && !isViewOnlyModal) ? (
-                            <Col span={24}>
+                            <Col span={24}> {/* Span 24 for full width damage description */}
                                 <Form.Item name="damageDescription" label="Damage Description">
                                     <Input.TextArea rows={2} readOnly={isViewOnlyModal} />
                                 </Form.Item>
                             </Col>
                         ) : null}
+
                         <Col span={24}><Form.Item name="comment" label="Comment"><Input.TextArea rows={2} readOnly={isViewOnlyModal} /></Form.Item></Col>
                     </Row>
                 </Form>
@@ -383,9 +366,10 @@ const InUse = () => {
                         {targetStatus === 'In Stock' ? "Returned" : "Confirm"}
                     </Button>,
                 ]}
-                width={1000} // Increased width
+                width={1000} // Increased width for more horizontal space
                 centered
-                // Removed explicit body styling for scrollbars
+                // Removed max-height/overflowY from modal body to allow horizontal extension
+                // styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
             >
                 {assetForStatusChange && (
                     <Form form={statusChangeForm} layout="vertical">
@@ -452,10 +436,10 @@ const InUse = () => {
                                     <Input value={assetForStatusChange.warrantyInfo ? moment(assetForStatusChange.warrantyInfo).format('YYYY-MM-DD') : 'N/A'} readOnly />
                                 </Form.Item>
                             </Col>
-                            {/* Only the comment field is editable, damageDescription is now removed */}
-                            <Col span={24}>
+                            {/* Only the comment field is editable */}
+                            <Col span={24}> {/* Full width for comment */}
                                 <Form.Item name="comment" label="Comments">
-                                    <Input.TextArea rows={3} placeholder={`Add comments related to this status change (e.g., condition on return, reason for ${targetStatus.toLowerCase()}).`} />
+                                    <Input.TextArea rows={3} placeholder={`Add comments related to this status change (e.g., condition on return, reason for damage/e-waste).`} />
                                 </Form.Item>
                             </Col>
                         </Row>
