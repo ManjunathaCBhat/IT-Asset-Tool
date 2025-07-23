@@ -2,30 +2,40 @@ import React, { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import {
     Layout, Menu, Popover, Badge, List, Typography,
-    Avatar, Dropdown
+    Avatar, Dropdown, Space, Button
 } from 'antd';
 import {
     PlusOutlined, DatabaseOutlined, BellOutlined, UserOutlined,
     LogoutOutlined, TeamOutlined, CheckCircleOutlined, ToolOutlined,
-    WarningOutlined,
-    DeleteOutlined
+    WarningOutlined, DeleteOutlined, SettingOutlined
 } from '@ant-design/icons';
 import moment from 'moment';
 
-const { Header, Content, Sider } = Layout;
+const { Header, Content } = Layout;
 const { Text } = Typography;
 
+// --- Helper for status colors (can be moved to a utils file) ---
+const getStatusColor = (status) => {
+    const colors = {
+        'Dashboard': '#4A90E2', // Blue
+        'In Use': '#7ED321', // Green
+        'In Stock': '#FA8C16', // Orange for In Stock
+        'Damaged': '#D0021B', // Red
+        'E-Waste': '#8B572A', // Brown
+        'Add Equipment': '#1890ff', // Ant Design primary blue for Add Equipment
+    };
+    return colors[status] || 'default';
+};
+
 // --- Logo Component ---
-const Logo = ({ collapsed }) => {
+const Logo = () => {
     const logoStyle = {
         height: '32px',
-        margin: '16px',
+        marginRight: '24px',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
         fontSize: '20px',
         fontWeight: 'bold',
-        color: 'white',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
     };
@@ -33,37 +43,23 @@ const Logo = ({ collapsed }) => {
     const labsStyle = { color: '#D0021B' };
     return (
         <div style={logoStyle}>
-            {collapsed ? (
-                <>
-                    <span style={cirrusStyle}>C</span>
-                    <span style={labsStyle}>L</span>
-                </>
-            ) : (
-                <>
-                    <span style={cirrusStyle}>cirrus</span>
-                    <span style={labsStyle}>labs</span>
-                </>
-            )}
+            <span style={cirrusStyle}>cirrus</span>
+            <span style={labsStyle}>labs</span>
         </div>
     );
 };
 
 const AppLayout = ({ user, handleLogout, expiringItems }) => {
-    const [collapsed, setCollapsed] = useState(false);
     const location = useLocation();
 
-    // Define menu items based on user role
-      const menuItems = [
-        { key: '/', icon: <DatabaseOutlined />, label: <Link to="/">Dashboard</Link> }, // <--- NEW DASHBOARD LINK
-        
+    // Define main navigation items for the top bar
+    const mainNavItems = [
+        { key: '/', icon: <DatabaseOutlined />, label: 'Dashboard', statusKey: 'Dashboard' },
+        { key: '/in-stock', icon: <CheckCircleOutlined />, label: 'In Stock', statusKey: 'In Stock' },
+        { key: '/in-use', icon: <ToolOutlined />, label: 'In Use', statusKey: 'In Use' },
+        { key: '/damaged', icon: <WarningOutlined />, label: 'Damaged', statusKey: 'Damaged' },
+        { key: '/e-waste', icon: <DeleteOutlined />, label: 'E-Waste', statusKey: 'E-Waste' },
     ];
-
-    if (user?.role === 'Admin' || user?.role === 'Editor') {
-        menuItems.push({ key: '/add', icon: <PlusOutlined />, label: <Link to="/add">Add Equipment</Link> });
-    }
-    if (user?.role === 'Admin') {
-        menuItems.push({ key: '/users', icon: <TeamOutlined />, label: <Link to="/users">User Management</Link> });
-    }
 
     // --- Popover and Dropdown Menu Content ---
     const notificationContent = (
@@ -73,8 +69,9 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
             renderItem={item => (
                 <List.Item>
                     <List.Item.Meta
-                        title={<a href="#!">{item.model} ({item.serialNumber})</a>}
-                        description={`Expires on: ${moment(item.warrantyInfo).format('DD MMM YYYY')}`}
+                        // FIX: Moved the comment outside the JSX attribute
+                        title={<Link to={`/all-assets?assetId=${item.assetId}`}>{item.model} ({item.serialNumber})</Link>}
+                        description={`Expires on: ${moment(item.warrantyInfo).format('DD MM YYYY')}`}
                     />
                     {moment(item.warrantyInfo).isBefore(moment()) ?
                         <Text type="danger">Expired</Text> :
@@ -82,76 +79,131 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
                     }
                 </List.Item>
             )}
-            style={{width: 350}}
+            style={{ width: 350 }}
+            locale={{ emptyText: 'No warranty alerts.' }}
         />
     );
 
-    const userMenu = (
-        <Menu>
-            <Menu.Item key="email" disabled><Text strong>{user?.email}</Text></Menu.Item>
-            <Menu.Item key="role" disabled><Text type="secondary">Role: {user?.role}</Text></Menu.Item>
-            <Menu.Divider />
-            <Menu.Item key="logout" icon={<LogoutOutlined />} onClick={handleLogout}>Logout</Menu.Item>
-        </Menu>
-    );
+    // Dynamic User Menu Items
+    const getUserMenuItems = () => {
+        const items = [
+            // Display user's name if available, otherwise email
+            { key: 'user-info', label: <Text strong>{user?.name || user?.email}</Text>, disabled: true },
+            { key: 'role', label: <Text type="secondary">Role: {user?.role}</Text>, disabled: true },
+            { key: 'divider-1', type: 'divider' },
+            { key: 'settings', label: <Link to="/settings">Settings</Link>, icon: <SettingOutlined /> },
+        ];
 
-    const siderWidth = collapsed ? 80 : 200;
+        if (user?.role === 'Admin') {
+            items.push({
+                key: 'user-management',
+                label: <Link to="/users">User Management</Link>,
+                icon: <TeamOutlined />
+            });
+        }
+
+        items.push(
+            { key: 'divider-2', type: 'divider' },
+            { key: 'logout', label: 'Logout', icon: <LogoutOutlined />, onClick: handleLogout }
+        );
+        return items;
+    };
+
 
     return (
         <Layout style={{ minHeight: '100vh' }}>
-            <Sider
-                collapsible
-                collapsed={collapsed}
-                onCollapse={setCollapsed}
-                width={siderWidth}
+            <Header
                 style={{
-                    overflow: 'auto',
-                    height: '100vh',
-                    position: 'fixed',
-                    left: 0,
+                    padding: '0 24px',
+                    background: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    position: 'sticky',
                     top: 0,
-                    bottom: 0,
                     zIndex: 10,
+                    boxShadow: '0 2px 8px #f0f1f2',
+                    height: '64px'
                 }}
             >
-                <Logo collapsed={collapsed} />
-                <Menu
-                    theme="dark"
-                    mode="inline"
-                    selectedKeys={[location.pathname]}
-                    items={menuItems}
-                />
-            </Sider>
-            <Layout style={{ marginLeft: siderWidth, transition: 'margin-left 0.2s' }}>
-                <Header
-                    style={{
-                        padding: '0 24px',
-                        background: '#fff',
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        alignItems: 'center',
-                        gap: '20px',
-                        position: 'sticky',
-                        top: 0,
-                        zIndex: 1,
-                        boxShadow: '0 2px 8px #f0f1f2',
-                    }}
-                >
+                {/* Left Section: Logo */}
+                <div>
+                    <Logo />
+                </div>
+
+                {/* Middle Section: Main Navigation Buttons & Add Equipment */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1 }}>
+                    <Space size="middle">
+                        {mainNavItems.map(item => {
+                            const isActive = location.pathname === item.key;
+                            const buttonColor = getStatusColor(item.statusKey);
+
+                            return (
+                                <Link to={item.key} key={item.key}>
+                                    <Button
+                                        type={isActive ? 'primary' : 'default'}
+                                        icon={item.icon}
+                                        style={{
+                                            backgroundColor: isActive ? buttonColor : 'transparent',
+                                            borderColor: isActive ? buttonColor : '#d9d9d9',
+                                            color: isActive ? '#fff' : 'rgba(0, 0, 0, 0.85)',
+                                            fontWeight: isActive ? 'bold' : 'normal',
+                                            height: '40px',
+                                            padding: '0 15px',
+                                            fontSize: '14px',
+                                        }}
+                                    >
+                                        {item.label}
+                                    </Button>
+                                </Link>
+                            );
+                        })}
+                        {/* Add Equipment Button - Conditionally Rendered */}
+                        {(user?.role === 'Admin' || user?.role === 'Editor') && (
+                            <Link to="/add">
+                                <Button
+                                    type={location.pathname === '/add' ? 'primary' : 'default'}
+                                    icon={<PlusOutlined />}
+                                    style={{
+                                        backgroundColor: location.pathname === '/add' ? getStatusColor('Add Equipment') : 'transparent',
+                                        borderColor: location.pathname === '/add' ? getStatusColor('Add Equipment') : '#d9d9d9',
+                                        color: location.pathname === '/add' ? '#fff' : 'rgba(0, 0, 0, 0.85)',
+                                        fontWeight: location.pathname === '/add' ? 'bold' : 'normal',
+                                        height: '40px',
+                                        padding: '0 15px',
+                                        fontSize: '14px',
+                                    }}
+                                >
+                                    Add Equipment
+                                </Button>
+                            </Link>
+                        )}
+                    </Space>
+                </div>
+
+
+                {/* Right Section: Notifications and User Profile */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                     <Popover content={notificationContent} title="Notifications" trigger="click" placement="bottomRight">
                         <Badge count={expiringItems.length}>
                             <BellOutlined style={{ fontSize: '20px', cursor: 'pointer' }} />
                         </Badge>
                     </Popover>
-<Dropdown menu={{ items: userMenu.props.children.map(child => child.key === 'divider' ? { type: 'divider', key: 'divider' } : { key: child.key, label: child.props.children, icon: child.props.icon, disabled: child.props.disabled, onClick: child.props.onClick }) }} placement="bottomRight">
-    <Avatar style={{ backgroundColor: '#1890ff', cursor: 'pointer' }} icon={<UserOutlined />} />
-</Dropdown>
-                </Header>
-                <Content style={{ margin: '24px 16px', overflow: 'initial' }}>
-                   <div style={{ padding: 24, background: '#fff' }}>
-                        <Outlet />
-                   </div>
-                </Content>
-            </Layout>
+                    <Dropdown menu={{ items: getUserMenuItems() }} placement="bottomRight">
+                        <Avatar
+                            style={{ backgroundColor: '#1890ff', cursor: 'pointer' }}
+                            icon={user?.name ? null : <UserOutlined />}
+                        >
+                            {user?.name ? user.name.charAt(0).toUpperCase() : null}
+                        </Avatar>
+                    </Dropdown>
+                </div>
+            </Header>
+            <Content style={{ margin: '24px 16px', overflow: 'initial' }}>
+                <div style={{ padding: 24, background: '#fff' }}>
+                    <Outlet />
+                </div>
+            </Content>
         </Layout>
     );
 };

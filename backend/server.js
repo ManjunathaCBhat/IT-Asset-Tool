@@ -9,8 +9,6 @@ const moment = require('moment'); // Import moment for date calculations
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const nodemailer = require('nodemailer');
-const crypto = require('crypto');
 
 // --- Middleware ---
 app.use(cors());
@@ -25,19 +23,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const UserSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    role: { type: String, enum: ['Admin', 'Editor', 'Viewer'], default: 'Viewer' },
-    // Add these two:
-    resetPasswordToken: String,
-    resetPasswordExpires: Date,
-});
-
-
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER, // your Gmail address
-        pass: process.env.EMAIL_PASS, // your Gmail app password or real password (NOT recommended)
-    },
+    role: { type: String, enum: ['Admin', 'Editor', 'Viewer'], default: 'Viewer' }
 });
 
 const EquipmentSchema = new mongoose.Schema({
@@ -144,36 +130,17 @@ app.get('/api/users', [auth, requireRole(['Admin'])], async (req, res) => {
     } catch (err) { console.error(err.message); res.status(500).send('Server Error'); }
 });
 
-app.post('/api/forgot-password', async (req, res) => {
-    const { email } = req.body;
+app.post('/api/users/create', [auth, requireRole(['Admin'])], async (req, res) => {
+    const { email, password, role } = req.body;
     try {
-        const user = await User.findOne({ email });
-        if (!user) return res.status(404).json({ message: 'User not found' });
-
-        // Generate secure token and expiry
-        const resetToken = crypto.randomBytes(32).toString('hex');
-        const resetTokenExpiry = Date.now() + 3600000; // 1 hour
-        user.resetPasswordToken = resetToken;
-        user.resetPasswordExpires = resetTokenExpiry;
+        let user = await User.findOne({ email });
+        if (user) return res.status(400).json({ msg: 'User already exists' });
+        user = new User({ email, password, role });
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(password, salt);
         await user.save();
-
-        const resetUrl = `http://localhost:3000/reset-password?token=${resetToken}&email=${email}`;
-
-        const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: email,
-            subject: 'Password Reset Request',
-            text: `You requested a password reset. Click here to reset your password: ${resetUrl}. If you didn't request this, ignore this email.`,
-            html: `<p>You requested a password reset.</p><p>Click <a href="${resetUrl}">here</a> to reset your password.</p><p>If you didn't request this, ignore this email.</p>`
-        };
-
-        await transporter.sendMail(mailOptions);
-
-        res.status(200).json({ message: 'Password reset email sent' });
-    } catch (err) {
-        console.error('Forgot password error:', err.message);
-        res.status(500).json({ message: 'Failed to send password reset email' });
-    }
+        res.json({ msg: 'User created successfully' });
+    } catch (err) { console.error(err.message); res.status(500).send('Server Error'); }
 });
 
 app.post('/api/reset-password', async (req, res) => {
@@ -205,7 +172,6 @@ app.post('/api/reset-password', async (req, res) => {
     res.status(500).json({ message: 'Failed to reset password.' });
   }
 });
-
 
 app.delete('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) => {
     try {
@@ -366,7 +332,6 @@ app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res
         res.status(500).json({ message: err.message });
     }
 });
-
 
 
 // --- Server Start ---
