@@ -42,6 +42,7 @@ const InStockView = ({ user }) => {
   const inStockColumns = [
     { title: 'Model', dataIndex: 'model', key: 'model' },
     { title: 'Category', dataIndex: 'category', key: 'category' },
+    { title: 'Serial Number', dataIndex: 'serialNumber', key: 'serialNumber' },
     {
       title: 'Warranty Expiry',
       dataIndex: 'warrantyInfo',
@@ -146,8 +147,7 @@ const InStockView = ({ user }) => {
           okText="Yes"
           cancelText="No"
         >
-          {/* Invisible element only for anchoring popconfirm */}
-          <span></span>
+          <span />
         </Popconfirm>
       )}
     </Space>
