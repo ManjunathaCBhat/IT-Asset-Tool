@@ -1,13 +1,18 @@
 // src/WelcomePage.js
 import React, { useState, useEffect } from 'react';
-// import { Link } from 'react-router-dom'; // Keep this if you use React Router Links
+import { Link } from 'react-router-dom';
 
 const WelcomePage = () => {
     // --- Responsive State & Logic ---
     const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+    const [windowHeight, setWindowHeight] = useState(window.innerHeight);
+    const [buttonHovered, setButtonHovered] = useState(false); // State for button hover effect
 
     useEffect(() => {
-        const handleResize = () => setWindowWidth(window.innerWidth);
+        const handleResize = () => {
+            setWindowWidth(window.innerWidth);
+            setWindowHeight(window.innerHeight);
+        };
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
@@ -17,7 +22,6 @@ const WelcomePage = () => {
     const isLargeDesktop = windowWidth <= 1200;
 
     // --- Image Paths (ensure these are correct relative to your public folder) ---
-    // Updated logo path based on your provided absolute path for C_Lab Logo.png
     const logoSrc = `${process.env.PUBLIC_URL}/C_Lab Logo.png`;
     const heroBgSrc = `${process.env.PUBLIC_URL}/eae123d71b02e34da63aec2a6f8ecd450165c106.png`;
 
@@ -30,6 +34,10 @@ const WelcomePage = () => {
         backgroundColor: '#ffffff',
         color: 'rgba(0, 0, 0, 0.78)',
         boxSizing: 'border-box',
+        minHeight: '100vh',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
     };
     const containerStyle = {
         maxWidth: '1440px',
@@ -53,10 +61,11 @@ const WelcomePage = () => {
     // Header Styles
     const siteHeaderStyle = {
         backgroundColor: '#ffffff',
-        paddingTop: '15px',
-        paddingBottom: '15px',
-        ...(isLargeDesktop && { paddingLeft: '10px', paddingRight: '10px' }),
-        ...(isMobile && { paddingLeft: '5px', paddingRight: '5px', paddingTop: '10px', paddingBottom: '10px' }),
+        paddingTop: isMobile ? '6px' : '8px',
+        paddingBottom: isMobile ? '6px' : '8px',
+        paddingLeft: isLargeDesktop ? '10px' : '15px',
+        paddingRight: isLargeDesktop ? '10px' : '15px',
+        flexShrink: 0,
     };
     const headerContainerStyle = {
         ...containerStyle,
@@ -66,184 +75,148 @@ const WelcomePage = () => {
     const headerTopStyle = {
         display: 'flex',
         justifyContent: 'flex-end',
+        alignItems: 'center',
         width: '100%',
-        marginBottom: '10px',
-        ...(isMobile && { justifyContent: 'center', marginBottom: '8px' }),
+        marginBottom: '8px',
+        marginTop: isMobile ? '5px' : '10px',
+        ...(isMobile && { justifyContent: 'center', marginBottom: '6px', flexWrap: 'wrap' }),
     };
     const locationNavUlStyle = {
         ...ulBaseStyle,
         display: 'flex',
-        gap: '15px',
-        ...(isMobile && { gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }),
+        alignItems: 'center',
+        ...(isMobile && { flexWrap: 'wrap', justifyContent: 'center' }),
+    };
+    const locationNavLiStyle = {
+        position: 'relative',
+        padding: isMobile ? '0 6px' : '0 8px',
+    };
+    const separatorStyle = {
+        borderRight: '1px solid #ccc',
+        height: isMobile ? '12px' : '14px',
+        margin: isMobile ? '0 6px' : '0 8px',
     };
     const locationNavAStyle = {
         fontFamily: "'Crimson Text', serif",
-        fontSize: '16px',
+        fontSize: isMobile ? '12px' : '13px',
         fontWeight: 400,
         color: '#000000',
         letterSpacing: '0.6px',
+        whiteSpace: 'nowrap',
         ...linkBaseStyle,
     };
+    const callIconStyle = {
+        marginRight: isMobile ? '3px' : '5px',
+        color: '#0f3374',
+        fontSize: isMobile ? '11px' : '13px',
+    };
+
     const headerMainStyle = {
         display: 'flex',
-        justifyContent: 'space-between',
+        justifyContent: 'flex-start',
         alignItems: 'center',
         width: '100%',
-        gap: '30px', // Increased gap for better separation
+        gap: '20px',
         ...(isMobile && { flexWrap: 'wrap', justifyContent: 'center', gap: '10px' }),
     };
     const logoBaseStyle = {
-        width: '200px', // Adjusted to match the provided logo image scale
+        width: isMobile ? '100px' : '150px',
         height: 'auto',
         display: 'block',
-        // Optional: Filter for subtle shadow or brightness if desired for image
-        // filter: 'drop-shadow(2px 2px 2px rgba(0,0,0,0.1))',
-        ...(isMobile && { width: '150px', margin: '0 auto', order: -1, textAlign: 'center' }),
-    };
-    const mainNavBaseStyle = {
-        ...(isLargeDesktop && { display: 'none' }),
-    };
-    const mainNavUlStyle = {
-        ...ulBaseStyle,
-        display: 'flex',
-        gap: '20px',
-    };
-    const mainNavAStyle = {
-        fontFamily: "'Crimson Text', serif",
-        fontSize: '16px',
-        fontWeight: 400,
-        color: '#000000',
-        letterSpacing: '0.6px',
-        ...linkBaseStyle,
-    };
-    const ctaButtonStyle = {
-        background: '#dc2626', // Changed to RED
-        color: '#ffffff',
-        fontFamily: "'Crimson Text', serif",
-        fontSize: '18px', // Reduced
-        fontWeight: 700,
-        padding: '8px 30px', // Slightly increased padding for better feel
-        borderRadius: '5px',
-        textAlign: 'center',
-        letterSpacing: '0.7px',
-        whiteSpace: 'nowrap',
-        ...linkBaseStyle,
-        // Subtle hover effect (more complex for inline)
-        // onMouseOver: (e) => e.currentTarget.style.backgroundColor = '#b01f1f',
-        // onMouseLeave: (e) => e.currentTarget.style.backgroundColor = '#dc2626',
+        filter: 'drop-shadow(2px 2px 3px rgba(0,0,0,0.2))',
     };
 
     // Hero Section Styles
     const heroSectionStyle = {
         position: 'relative',
-        padding: '60px 0',
+        flexGrow: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: isMobile ? '20px 0' : '30px 0',
         overflow: 'hidden',
-        ...(isMobile && { padding: '30px 0', textAlign: 'center' }),
+        textAlign: 'center',
     };
     const heroBackgroundStyle = {
         position: 'absolute',
         top: 0,
-        left: '50%',
-        transform: 'translateX(-50%)',
+        left: 0,
         width: '100%',
-        maxWidth: '1440px',
-        height: '450px',
+        height: '100%',
         zIndex: -1,
-        ...(isMobile && { height: '280px' }),
     };
     const heroBackgroundImgStyle = {
         width: '100%',
         height: '100%',
         objectFit: 'cover',
+        objectPosition: 'center',
     };
     const heroContentStyle = {
-        maxWidth: '900px',
-        padding: '30px 0',
-        ...(isMobile && { margin: '0 auto' }),
+        maxWidth: isMobile ? '90%' : '800px',
+        padding: isMobile ? '10px' : '20px',
+        boxSizing: 'border-box',
+        zIndex: 1,
     };
     const heroTitleStyle = {
         fontFamily: "'Crimson Text', serif",
-        fontSize: '36px',
+        fontSize: isMobile ? '28px' : '36px',
         fontWeight: 700,
         color: '#0f3374',
         letterSpacing: '1.3px',
         marginTop: 0,
-        marginBottom: '12px',
-        ...(isMobile && { fontSize: '30px', marginBottom: '8px' }),
+        marginBottom: isMobile ? '10px' : '12px',
     };
     const heroTextStyle = {
         fontFamily: "'Poly', sans-serif",
-        fontSize: '18px',
+        fontSize: isMobile ? '14px' : '18px',
         color: 'rgba(0, 0, 0, 0.78)',
         lineHeight: 1.4,
         letterSpacing: '1.3px',
-        marginBottom: '15px',
-        ...(isMobile && { fontSize: '15px', marginBottom: '10px' }),
+        marginBottom: isMobile ? '10px' : '15px',
     };
     const heroButtonStyle = {
         display: 'inline-block',
-        background: '#dc2626',
+        background: buttonHovered ? '#b01f1f' : '#dc2626', // Change color on hover
         color: '#ffffff',
         fontFamily: "'Rozha One', serif",
-        fontSize: '24px',
+        fontSize: isMobile ? '18px' : '24px',
         fontWeight: 400,
-        padding: '10px 30px',
+        padding: isMobile ? '8px 20px' : '10px 30px',
         borderRadius: '20px',
         letterSpacing: '0.2px',
         textAlign: 'center',
+        transition: 'background 0.3s ease, transform 0.3s ease', // Smooth transition
+        transform: buttonHovered ? 'scale(1.05)' : 'scale(1)', // Slight scale on hover
         ...linkBaseStyle,
-        ...(isMobile && { fontSize: '18px', padding: '8px 20px' }),
     };
 
-    // Footer Styles
+    // Footer Styles (unchanged)
     const siteFooterStyle = {
         backgroundColor: '#36548b',
         color: '#ffffff',
-        padding: '40px 0',
+        padding: isMobile ? '5px 0' : '8px 0',
+        flexShrink: 0,
     };
     const footerContainerStyle = {
         ...containerStyle,
         display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        gap: '20px',
-        ...(isTablet && { flexDirection: 'column', alignItems: 'center', textAlign: 'center' }),
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: '10px',
+        flexDirection: 'column',
+        textAlign: 'center',
     };
     const footerLogoImgStyle = {
-        width: '150px',
+        width: isMobile ? '80px' : '100px',
         height: 'auto',
-        // Optional: Filter for subtle shadow or brightness if desired for image
-        // filter: 'brightness(1.2) drop-shadow(0px 0px 5px rgba(255,255,255,0.2))',
+        marginBottom: '3px',
+        filter: 'drop-shadow(2px 2px 3px rgba(0,0,0,0.2))',
     };
-    const footerNavStyle = {
-        display: 'flex',
-        gap: '25px', // Reduced gap for compactness
-        ...(isTablet && { flexDirection: 'column', gap: '15px', marginTop: '20px' }),
-        ...(isMobile && { width: '100%' }),
-    };
-    const footerColumnH3Style = {
-        fontFamily: "'Playfair Display', serif",
-        fontSize: '18px', // Reduced
-        fontWeight: 700,
-        marginTop: 0,
-        marginBottom: '8px', // Reduced
-        letterSpacing: '1.2px', // Adjusted
-        color: '#ffffff',
-        ...(isMobile && { fontSize: '16px', marginBottom: '6px' }), // Reduced
-    };
-    const footerColumnUlStyle = {
-        ...ulBaseStyle,
-    };
-    const footerColumnLiStyle = {
-        marginBottom: '4px', // Reduced
-    };
-    const footerColumnAStyle = {
+    const copyrightTextStyle = {
         fontFamily: "'Poly', sans-serif",
-        fontSize: '13px', // Reduced significantly
-        letterSpacing: '1.2px', // Adjusted
+        fontSize: isMobile ? '8px' : '10px',
+        letterSpacing: '0.8px',
         color: '#ffffff',
-        ...linkBaseStyle,
-        ...(isMobile && { fontSize: '11px' }), // Reduced
     };
 
 
@@ -252,29 +225,51 @@ const WelcomePage = () => {
             {/* Header */}
             <header id="header" style={siteHeaderStyle}>
                 <div style={headerContainerStyle}>
+                    {/* Top-right navigation bar */}
                     <div style={headerTopStyle}>
-                        <nav style={{ /* location-nav */ }}>
+                        <nav>
                             <ul style={locationNavUlStyle}>
-                                <li><a href="#" style={locationNavAStyle}>INDIA</a></li>
-                                <li><a href="#" style={locationNavAStyle}>CANADA</a></li>
-                                <li><a href="#" style={locationNavAStyle}>MIDDLE EAST</a></li>
-                                <li><a href="#" style={locationNavAStyle}>USA</a></li>
+                                {/* Call Us */}
+                                <li style={locationNavLiStyle}>
+                                    <a href="tel:877-431-0767" style={locationNavAStyle}>
+                                        <span style={callIconStyle}>📞</span> CALL US: (877)431-0767
+                                    </a>
+                                </li>
+                                {/* Separator */}
+                                <div style={separatorStyle}></div>
+
+                                {/* INDIA */}
+                                <li style={locationNavLiStyle}>
+                                    <a href="https://www.cirruslabs.io/india" target="_blank" rel="noopener noreferrer" style={locationNavAStyle}>INDIA</a>
+                                </li>
+                                {/* Separator */}
+                                <div style={separatorStyle}></div>
+
+                                {/* CANADA */}
+                                <li style={locationNavLiStyle}>
+                                    <a href="https://www.cirruslabs.io/north" target="_blank" rel="noopener noreferrer" style={locationNavAStyle}>CANADA</a>
+                                </li>
+                                {/* Separator */}
+                                <div style={separatorStyle}></div>
+
+                                {/* MIDDLE EAST */}
+                                <li style={locationNavLiStyle}>
+                                    <a href="https://www.cirruslabs.io/middleeast" target="_blank" rel="noopener noreferrer" style={locationNavAStyle}>MIDDLE EAST</a>
+                                </li>
+                                {/* Separator */}
+                                <div style={separatorStyle}></div>
+
+                                {/* USA (no separator after last item) */}
+                                <li style={locationNavLiStyle}>
+                                    <a href="https://www.cirruslabs.io/usa" target="_blank" rel="noopener noreferrer" style={locationNavAStyle}>USA</a>
+                                </li>
                             </ul>
                         </nav>
                     </div>
                     <div style={headerMainStyle}>
-                        <a href="#" style={isMobile ? { order: -1, width: '100%', textAlign: 'center', ...linkBaseStyle } : linkBaseStyle}>
+                        <Link to="/" style={linkBaseStyle}>
                             <img src={logoSrc} alt="Cirrus Labs Logo" style={logoBaseStyle} />
-                        </a>
-                        <nav style={mainNavBaseStyle}>
-                            <ul style={mainNavUlStyle}>
-                                <li><a href="#" style={mainNavAStyle}>Solutions</a></li>
-                                <li><a href="#" style={mainNavAStyle}>Services</a></li>
-                                <li><a href="#" style={mainNavAStyle}>Resources</a></li>
-                                <li><a href="#" style={mainNavAStyle}>Company</a></li>
-                            </ul>
-                        </nav>
-                        <a href="/login" style={ctaButtonStyle}>Contact us</a>
+                        </Link>
                     </div>
                 </div>
             </header>
@@ -284,18 +279,22 @@ const WelcomePage = () => {
                 <div style={heroBackgroundStyle}>
                     <img src={heroBgSrc} alt="Dotted background pattern" style={heroBackgroundImgStyle} />
                 </div>
-                <div style={containerStyle}>
-                    <div style={heroContentStyle}>
-                        <h1 style={heroTitleStyle}>Welcome To AssetTracker</h1>
-                        <p style={heroTextStyle}>
-                            Your IT Assets. End-to-end IT asset tracking, auditing, and life cycle management in one powerful platform.
-                            <br/><br/>
-                            Take Control of Your IT Assets with Smart, Scalable Management.
-                            Optimize your hardware, software, and digital resources — all in one place.
-                            Reduce costs, improve security, and stay audit-ready with our powerful IT Asset Management solutions.
-                        </p>
-                        <a href="/login" style={heroButtonStyle}>Get Started</a>
-                    </div>
+                <div style={heroContentStyle}>
+                    <h1 style={heroTitleStyle}>Welcome To AssetTracker</h1>
+                    <p style={heroTextStyle}>
+                        This internal IT Asset Management system is exclusively designed for our company's IT team.
+                        <br/><br/>
+                        It provides comprehensive hardware tracking, auditing, and lifecycle management for all IT hardware resources.
+                        Optimize hardware resources, enhance security, and maintain audit readiness with our powerful internal ITAM solution.
+                    </p>
+                    <Link
+                        to="/login"
+                        style={heroButtonStyle}
+                        onMouseOver={() => setButtonHovered(true)}
+                        onMouseLeave={() => setButtonHovered(false)}
+                    >
+                        Get Started
+                    </Link>
                 </div>
             </section>
 
@@ -303,36 +302,13 @@ const WelcomePage = () => {
             <footer id="footer" style={siteFooterStyle}>
                 <div style={footerContainerStyle}>
                     <div> {/* footer-logo container */}
-                        <a href="#" style={linkBaseStyle}>
+                        <Link to="/" style={linkBaseStyle}>
                             <img src={logoSrc} alt="Cirrus Labs Logo" style={footerLogoImgStyle} />
-                        </a>
+                        </Link>
                     </div>
-                    <div style={footerNavStyle}>
-                        <div> {/* footer-column 1 */}
-                            <h3 style={footerColumnH3Style}>Solutions</h3>
-                            <ul style={ulBaseStyle}>
-                                <li style={footerColumnLiStyle}><a href="#" style={footerColumnAStyle}>Asset Tracking</a></li>
-                                <li style={footerColumnLiStyle}><a href="#" style={footerColumnAStyle}>Lifestyle Management</a></li>
-                                <li style={footerColumnLiStyle}><a href="#" style={footerColumnAStyle}>Reporting</a></li>
-                            </ul>
-                        </div>
-                        <div> {/* footer-column 2 */}
-                            <h3 style={footerColumnH3Style}>Resources</h3>
-                            <ul style={ulBaseStyle}>
-                                <li style={footerColumnLiStyle}><a href="#" style={footerColumnAStyle}>Documentation</a></li>
-                                <li style={footerColumnLiStyle}><a href="#" style={footerColumnAStyle}>Support</a></li>
-                                <li style={footerColumnLiStyle}><a href="#" style={footerColumnAStyle}>Blog</a></li>
-                            </ul>
-                        </div>
-                        <div> {/* footer-column 3 */}
-                            <h3 style={footerColumnH3Style}>Company</h3>
-                            <ul style={ulBaseStyle}>
-                                <li style={footerColumnLiStyle}><a href="#" style={footerColumnAStyle}>About Us</a></li>
-                                <li style={footerColumnLiStyle}><a href="#" style={footerColumnAStyle}>Contact</a></li>
-                                <li style={footerColumnLiStyle}><a href="#" style={footerColumnAStyle}>Careers</a></li>
-                            </ul>
-                        </div>
-                    </div>
+                    <p style={copyrightTextStyle}>
+                        © {new Date().getFullYear()} Cirrus Labs. All rights reserved.
+                    </p>
                 </div>
             </footer>
         </div>
