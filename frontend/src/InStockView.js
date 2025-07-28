@@ -117,7 +117,8 @@ const InStockView = ({ user }) => {
     },
   ];
 
-  return (
+return (
+  <>
     <Space>
       <Button
         type="text"
@@ -133,25 +134,29 @@ const InStockView = ({ user }) => {
         title="Assign"
       />
 
+      {/* Ensure only one child for Dropdown */}
       <Dropdown menu={{ items: menuItems }} trigger={['click']}>
         <Button type="text" icon={<MoreOutlined style={{ fontSize: '20px' }} />} />
       </Dropdown>
-
-      {confirmationConfig?.visible && (
-        <Popconfirm
-          open={true}
-          title={confirmationConfig.title}
-          onConfirm={confirmationConfig.onConfirm}
-          onCancel={confirmationConfig.onCancel}
-          okText="Yes"
-          cancelText="No"
-        >
-          {/* Invisible element only for anchoring popconfirm */}
-          <span></span>
-        </Popconfirm>
-      )}
     </Space>
-  );
+
+    {/* Separate outside the Space */}
+    {confirmationConfig?.visible && (
+      <Popconfirm
+        open={true}
+        title={confirmationConfig.title}
+        onConfirm={confirmationConfig.onConfirm}
+        onCancel={confirmationConfig.onCancel}
+        okText="Yes"
+        cancelText="No"
+      >
+        {/* Use an invisible wrapper element */}
+        <span />
+      </Popconfirm>
+    )}
+  </>
+);
+
 };
 
   return (
