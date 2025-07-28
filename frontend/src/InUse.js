@@ -62,6 +62,27 @@ const InUse = () => {
         fetchInUseAssets();
     }, [fetchInUseAssets]); // Dependency for useEffect
 
+    const [groupedAssets, setGroupedAssets] = React.useState([]);
+const [modalVisible, setModalVisible] = React.useState(false);
+const [selectedEmployeeAssets, setSelectedEmployeeAssets] = React.useState(null);
+
+const fetchGroupedAssets = React.useCallback(async () => {
+  try {
+    const response = await axios.get('http://localhost:5000/api/equipment/grouped-by-email', {
+      headers: getAuthHeader(),
+    });
+    setGroupedAssets(response.data);
+  } catch (error) {
+    message.error('Failed to load grouped assets.');
+    console.error(error);
+  }
+}, [getAuthHeader]);
+
+React.useEffect(() => {
+  fetchGroupedAssets();
+}, [fetchGroupedAssets]);
+
+
     const handleSearch = (e) => {
         const value = e.target.value;
         setSearchTerm(value);
@@ -219,18 +240,28 @@ const InUse = () => {
                 return warrantyDate.format('DD MMM YYYY');
             }
         },
+
+
         {
-            title: 'Details',
-            key: 'viewDetails',
-            render: (_, record) => (
-                <Button
-                    type="link"
-                    icon={<EyeOutlined style={{ color: 'blue', fontSize: '18px' }} />}
-                    onClick={() => handleViewDetails(record)}
-                />
-            )
-        },
-        {
+  title: 'Details',
+  key: 'viewDetails',
+  render: function (_, record) {
+    return (
+      <Button
+        type="link"
+        icon={<EyeOutlined style={{ color: 'blue', fontSize: '18px' }} />}
+        onClick={function () {
+          const group = groupedAssets.find(g => g._id === record.employeeEmail);
+          setSelectedEmployeeAssets(group);
+          setModalVisible(true);
+        }}
+      />
+    );
+  }
+},
+
+
+{
             title: 'Actions',
             key: 'actions',
             render: (_, record) => (
@@ -322,7 +353,7 @@ const InUse = () => {
                         <Col span={8}><Form.Item name="assetId" label="Asset ID"><Input readOnly={isViewOnlyModal} /></Form.Item></Col>
                         <Col span={8}><Form.Item name="category" label="Category" rules={[{ required: true }]}><Input readOnly={isViewOnlyModal} /></Form.Item></Col>
                         <Col span={8}><Form.Item name="model" label="Model" rules={[{ required: true }]}><Input readOnly={isViewOnlyModal} /></Form.Item></Col>
-                        <Col span={8}><Form.Item name="serialNumber" label="Serial Number" rules={[{ required: true }]}><Input readOnly={isViewOnlyModal} /></Form.Item></Col>
+                        <Col span={8}><Form.Item name="serialNumber" label="Serial Number" rules={[{ required: false }]}><Input readOnly={isViewOnlyModal} /></Form.Item></Col>
                         <Col span={8}><Form.Item name="assigneeName" label="Assignee Name" rules={[{ required: true }]}><Input readOnly={isViewOnlyModal} /></Form.Item></Col>
                         <Col span={8}><Form.Item name="position" label="Position" rules={[{ required: true }]}><Input readOnly={isViewOnlyModal} /></Form.Item></Col>
                         <Col span={8}><Form.Item name="employeeEmail" label="Email" rules={[{ required: true, type: 'email' }]}><Input readOnly={isViewOnlyModal} /></Form.Item></Col>
@@ -446,6 +477,63 @@ const InUse = () => {
                     </Form>
                 )}
             </Modal>
+
+            <Modal
+  title={`Assets assigned to ${selectedEmployeeAssets ? selectedEmployeeAssets._id : ''}`}
+  open={modalVisible}
+  onCancel={function () {
+    setModalVisible(false);
+    setSelectedEmployeeAssets(null);
+  }}
+  footer={[
+    <Button
+      key="close"
+      onClick={function () {
+        setModalVisible(false);
+        setSelectedEmployeeAssets(null);
+      }}
+    >
+      Close
+    </Button>
+  ]}
+  width={900}
+  centered
+>
+  {selectedEmployeeAssets ? (
+    <Table
+      dataSource={selectedEmployeeAssets.assets}
+      rowKey="_id"
+      pagination={false}
+      columns={[
+        { title: 'Asset ID', dataIndex: 'assetId', key: 'assetId' },
+        { title: 'Model', dataIndex: 'model', key: 'model' },
+        { title: 'Category', dataIndex: 'category', key: 'category' },
+        { title: 'Serial Number', dataIndex: 'serialNumber', key: 'serialNumber' },
+        {
+          title: 'Purchase Date',
+          dataIndex: 'purchaseDate',
+          key: 'purchaseDate',
+          render: function (date) {
+            return date ? moment(date).format('YYYY-MM-DD') : 'N/A';
+          }
+        },
+        {
+          title: 'Warranty Expiry',
+          dataIndex: 'warrantyInfo',
+          key: 'warrantyInfo',
+          render: function (date) {
+            return date ? moment(date).format('YYYY-MM-DD') : 'N/A';
+          }
+        }
+      ]}
+      size="small"
+      scroll={{ x: 'max-content' }}
+    />
+  ) : (
+    React.createElement('p', null, 'No assets found.')
+  )}
+</Modal>
+
         </>
     );
 };
