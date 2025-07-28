@@ -42,6 +42,7 @@ const InStockView = ({ user }) => {
   const inStockColumns = [
     { title: 'Model', dataIndex: 'model', key: 'model' },
     { title: 'Category', dataIndex: 'category', key: 'category' },
+    { title: 'Serial Number', dataIndex: 'serialNumber', key: 'serialNumber' },
     {
       title: 'Warranty Expiry',
       dataIndex: 'warrantyInfo',
@@ -138,6 +139,22 @@ return (
       <Dropdown menu={{ items: menuItems }} trigger={['click']}>
         <Button type="text" icon={<MoreOutlined style={{ fontSize: '20px' }} />} />
       </Dropdown>
+<<<<<<< HEAD
+=======
+
+      {confirmationConfig?.visible && (
+        <Popconfirm
+          open={true}
+          title={confirmationConfig.title}
+          onConfirm={confirmationConfig.onConfirm}
+          onCancel={confirmationConfig.onCancel}
+          okText="Yes"
+          cancelText="No"
+        >
+          <span />
+        </Popconfirm>
+      )}
+>>>>>>> 677f0de131a56a8f2121b0987270fc6bb08439d9
     </Space>
 
     {/* Separate outside the Space */}

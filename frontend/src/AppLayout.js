@@ -7,7 +7,8 @@ import {
 import {
     PlusOutlined, DatabaseOutlined, BellOutlined, UserOutlined,
     LogoutOutlined, TeamOutlined, CheckCircleOutlined, ToolOutlined,
-    WarningOutlined, DeleteOutlined, SettingOutlined
+    WarningOutlined, DeleteOutlined, SettingOutlined,
+    HistoryOutlined // New icon for 'Removed'
 } from '@ant-design/icons';
 import moment from 'moment';
 
@@ -23,6 +24,7 @@ const getStatusColor = (status) => {
         'Damaged': '#D0021B', // Red
         'E-Waste': '#8B572A', // Brown
         'Add Equipment': '#1890ff', // Ant Design primary blue for Add Equipment
+        'Removed': '#607D8B', // Grey/Blue for Removed items (you can choose any color)
     };
     return colors[status] || 'default';
 };
@@ -59,6 +61,8 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
         { key: '/in-use', icon: <ToolOutlined />, label: 'In Use', statusKey: 'In Use' },
         { key: '/damaged', icon: <WarningOutlined />, label: 'Damaged', statusKey: 'Damaged' },
         { key: '/e-waste', icon: <DeleteOutlined />, label: 'E-Waste', statusKey: 'E-Waste' },
+        // NEW: Removed Assets Button
+        { key: '/removed', icon: <HistoryOutlined />, label: 'Removed', statusKey: 'Removed' },
     ];
 
     // --- Popover and Dropdown Menu Content ---
@@ -69,7 +73,6 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
             renderItem={item => (
                 <List.Item>
                     <List.Item.Meta
-                        // FIX: Moved the comment outside the JSX attribute
                         title={<Link to={`/all-assets?assetId=${item.assetId}`}>{item.model} ({item.serialNumber})</Link>}
                         description={`Expires on: ${moment(item.warrantyInfo).format('DD MM YYYY')}`}
                     />
@@ -201,7 +204,7 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
             </Header>
             <Content style={{ margin: '24px 16px', overflow: 'initial' }}>
                 <div style={{ padding: 24, background: '#fff' }}>
-                    <Outlet />
+                    <Outlet /> {/* This renders the matched child route component */}
                 </div>
             </Content>
         </Layout>

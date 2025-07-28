@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Table, Typography, message, Input, Space } from 'antd';
+import { Table, Typography, message, Input, Space, Popconfirm, Button } from 'antd'; // Import Popconfirm and Button
+import { DeleteOutlined } from '@ant-design/icons'; // Import DeleteOutlined icon
+import moment from 'moment'; // Import moment for handling dates
 
 const { Title } = Typography;
 const { Search } = Input;
@@ -44,6 +46,43 @@ const EWaste = () => {
         setFilteredData(filtered);
     };
 
+    // --- New: Handle Delete (Move to Removed) ---
+    const handleDelete = async (record) => {
+        try {
+            // API call to update the asset's status to 'Removed'
+            await axios.put(`http://localhost:5000/api/equipment/${record._id}`, {
+                status: 'Removed',
+                removalDate: moment().toISOString(), // Capture the removal date
+                originalStatus: 'E-Waste', // To track where it was removed from
+            }, {
+                headers: getAuthHeader(),
+            });
+
+            message.success(`Asset "${record.model}" (${record.serialNumber}) moved to Removed.`);
+
+            // Update local state to remove the item from the E-Waste list
+            const updatedData = data.filter(item => item._id !== record._id);
+            setData(updatedData);
+            setFilteredData(updatedData.filter(item =>
+                item.category?.toLowerCase().includes(searchText.toLowerCase()) ||
+                item.model?.toLowerCase().includes(searchText.toLowerCase()) ||
+                item.serialNumber?.toLowerCase().includes(searchText.toLowerCase()) ||
+                item.comment?.toLowerCase().includes(searchText.toLowerCase())
+            )); // Re-apply search filter
+
+            // You might want to navigate to the "Removed" page or just let the user click the button.
+            // If you want to auto-navigate, you'd need `useNavigate` from `react-router-dom` here.
+            // Example if you choose to navigate:
+            // import { useNavigate } from 'react-router-dom';
+            // const navigate = useNavigate();
+            // navigate('/removed');
+
+        } catch (error) {
+            console.error('Error moving asset to Removed:', error);
+            message.error('Failed to move asset to Removed. Please try again.');
+        }
+    };
+
     const columns = [
         {
             title: 'Sl No',
@@ -70,7 +109,26 @@ const EWaste = () => {
             title: 'Comment',
             dataIndex: 'comment',
             key: 'comment',
-        }
+        },
+        // --- New: Action Column with Delete Button ---
+        {
+            title: 'Action',
+            key: 'action',
+            render: (_, record) => (
+                <Popconfirm
+                    title="Are you sure to move this asset to Removed?"
+                    onConfirm={() => handleDelete(record)}
+                    okText="Yes"
+                    cancelText="No"
+                >
+                    <Button type="link" danger icon={<DeleteOutlined />}>
+                        Remove
+                    </Button>
+                </Popconfirm>
+            ),
+            width: 100,
+            align: 'center',
+        },
     ];
 
     return (
