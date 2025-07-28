@@ -15,6 +15,7 @@ import InUse from './InUse';
 import DamagedProducts from './DamagedProducts';
 import EWaste from './EWaste';
 import WelcomePage from './WelcomePage';
+import RemovedAssetsTable from './RemovedAssetsTable'; // CORRECTED PATH: Removed 'components/'
 import ResetPasswordPage from './ResetPasswordPage';
 
 const App = () => {
@@ -85,8 +86,9 @@ const App = () => {
                     <>
                         <Route path="/" element={<WelcomePage />} />
                         <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
-                        <Route path="*" element={<Navigate to="/" replace />} />
                         <Route path="/reset-password" element={<ResetPasswordPage />} />
+                        {/* Ensure any unknown paths for unauthenticated users also go to Welcome */}
+                        <Route path="*" element={<Navigate to="/" replace />} />
                     </>
                 ) : (
                     // --- Routes for AUTHENTICATED users ---
@@ -124,6 +126,9 @@ const App = () => {
                                 : <Navigate to="/" />
                             }
                         />
+                        {/* NEW: Route for Removed Assets Table */}
+                        <Route path="removed" element={<RemovedAssetsTable />} />
+
                         {/* Fallback to Dashboard for any unknown paths for authenticated users */}
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>

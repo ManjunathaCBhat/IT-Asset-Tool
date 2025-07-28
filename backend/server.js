@@ -29,7 +29,7 @@ const UserSchema = new mongoose.Schema({
 const EquipmentSchema = new mongoose.Schema({
     assetId: { type: String, required: true, unique: true },
     category: { type: String, required: true },
-    status: { type: String, required: true, enum: ['In Use', 'In Stock', 'Damaged', 'E-Waste'] },
+    status: { type: String, required: true, enum: ['In Use', 'In Stock', 'Damaged', 'E-Waste', 'Removed'] },
     model: { type: String },
     serialNumber: { type: String },
     warrantyInfo: { type: String }, // Storing as string to keep it flexible for Moment.js parsing
@@ -45,6 +45,19 @@ const EquipmentSchema = new mongoose.Schema({
     isDeleted: {
         type: Boolean,
         default: false
+    },
+    removalDate: {
+        type: Date,
+        required: false
+    },
+    originalStatus: {
+        type: String,
+        required: false
+    },
+    // *** ADDED THIS FIELD: To store who removed the asset ***
+    removedByEmail: {
+        type: String,
+        required: false // Not required if status is not 'Removed'
     }
 }, { timestamps: true });
 
@@ -90,7 +103,7 @@ const auth = (req, res, next) => {
     if (!token) return res.status(401).json({ msg: 'No token, authorization denied' });
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        req.user = decoded.user; // Attach user info to request
+        req.user = decoded.user; // Attach user info (id, role, email) to request
         next();
     } catch (e) {
         res.status(400).json({ msg: 'Token is not valid' });
@@ -107,7 +120,7 @@ const requireRole = (roles) => (req, res, next) => {
 
 // --- API Endpoints ---
 
-// --- User Endpoints --- (Keep these in the same order)
+// --- User Endpoints ---
 app.post('/api/users/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -157,7 +170,6 @@ app.delete('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) =>
     } catch (err) { console.error(err.message); res.status(500).send('Server Error'); }
 });
 
-
 // --- Equipment Endpoints (REORDERED FOR SPECIFICITY) ---
 
 // 1. Dashboard Specific Summary Endpoints (Most Specific paths first)
@@ -166,7 +178,8 @@ app.delete('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) =>
 // @access  Private
 app.get('/api/equipment/summary', auth, async (req, res) => {
     try {
-        const totalAssets = await Equipment.countDocuments({ isDeleted: { $ne: true } });
+        // Exclude 'Removed' status from general dashboard counts if desired
+        const totalAssets = await Equipment.countDocuments({ isDeleted: { $ne: true }, status: { $ne: 'Removed' } });
         const inUse = await Equipment.countDocuments({ status: 'In Use', isDeleted: { $ne: true } });
         const available = await Equipment.countDocuments({ status: 'In Stock', isDeleted: { $ne: true } });
         const damaged = await Equipment.countDocuments({ status: 'Damaged', isDeleted: { $ne: true } });
@@ -186,12 +199,12 @@ app.get('/api/equipment/summary', auth, async (req, res) => {
 });
 
 // @route   GET /api/equipment/total-value
-// @desc    Calculate total value of assets (excluding soft-deleted)
+// @desc    Calculate total value of assets (excluding soft-deleted and removed)
 // @access  Private
 app.get('/api/equipment/total-value', auth, async (req, res) => {
     try {
         const result = await Equipment.aggregate([
-            { $match: { isDeleted: { $ne: true } } }, // Only consider non-deleted items
+            { $match: { isDeleted: { $ne: true }, status: { $ne: 'Removed' } } }, // Only consider non-deleted and non-removed items
             {
                 $group: {
                     _id: null,
@@ -209,16 +222,15 @@ app.get('/api/equipment/total-value', auth, async (req, res) => {
 });
 
 // @route   GET /api/equipment/expiring-warranty
-// @desc    Get assets with warranty expiring in 30 days (excluding E-Waste and Damaged)
+// @desc    Get assets with warranty expiring in 30 days (excluding E-Waste, Damaged, and Removed)
 // @access  Private
 app.get('/api/equipment/expiring-warranty', auth, async (req, res) => {
     try {
         const thirtyDaysFromNow = moment().add(30, 'days').toDate();
-        // The 'now' variable was unused, removed for cleaner code
 
         const expiringItems = await Equipment.find({
             warrantyInfo: { $ne: null, $lte: thirtyDaysFromNow }, // Not null and less than or equal to 30 days from now
-            status: { $nin: ['E-Waste', 'Damaged'] }, // Only consider active items for warranty alerts
+            status: { $nin: ['E-Waste', 'Damaged', 'Removed'] }, // Exclude these statuses from warranty alerts
             isDeleted: { $ne: true } // Also exclude soft-deleted items
         }).select('model serialNumber warrantyInfo'); // Select only necessary fields
 
@@ -229,13 +241,16 @@ app.get('/api/equipment/expiring-warranty', auth, async (req, res) => {
     }
 });
 
-// 2. Specific Dynamic Route (should come before the general /api/equipment)
-// Get equipment count by category (excluding soft-deleted) - This route is specific
+// 2. Specific Dynamic Routes (should come before the general /api/equipment/:id)
+// @route   GET /api/equipment/count/:category
+// @desc    Get equipment count by category (excluding soft-deleted and removed)
+// @access  Private
 app.get('/api/equipment/count/:category', auth, async (req, res) => {
     try {
         const count = await Equipment.countDocuments({
             category: req.params.category,
-            isDeleted: { $ne: true } // Exclude deleted items from general counts
+            isDeleted: { $ne: true }, // Exclude deleted items
+            status: { $ne: 'Removed' } // Exclude removed items from general counts
         });
         res.json({ count });
     } catch (err) {
@@ -244,11 +259,24 @@ app.get('/api/equipment/count/:category', auth, async (req, res) => {
     }
 });
 
+// NEW ROUTE: Get all assets with status 'Removed'
+// IMPORTANT: This must be before app.get('/api/equipment/:id') and app.get('/api/equipment')
+app.get('/api/equipment/removed', auth, async (req, res) => {
+    try {
+        const removedAssets = await Equipment.find({ status: 'Removed' });
+        res.json(removedAssets);
+    } catch (err) {
+        console.error('Error in /api/equipment/removed:', err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+
 // 3. General Equipment Routes (More general, placed after specific ones)
-// GET all equipment (that is NOT soft-deleted)
+// GET all equipment (that is NOT soft-deleted and NOT 'Removed')
 app.get('/api/equipment', auth, async (req, res) => {
     try {
-        const equipment = await Equipment.find({ isDeleted: { $ne: true } }).sort({ createdAt: -1 });
+        const equipment = await Equipment.find({ isDeleted: { $ne: true }, status: { $ne: 'Removed' } }).sort({ createdAt: -1 });
         res.json(equipment);
     } catch (err) {
         console.error('Error in /api/equipment (GET all):', err.message);
@@ -273,7 +301,37 @@ app.post('/api/equipment', [auth, requireRole(['Admin', 'Editor'])], async (req,
 
 app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (req, res) => {
     try {
-        const updatedEquipment = await Equipment.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }); // Added runValidators
+        const { status, removalDate, originalStatus, ...otherFields } = req.body; // Destructure new fields
+
+        let updateFields = { ...otherFields };
+
+        // Handle 'Removed' status specific fields
+        if (status === 'Removed') {
+            updateFields.status = 'Removed';
+            updateFields.removalDate = removalDate;
+            updateFields.originalStatus = originalStatus;
+            updateFields.isDeleted = false; // Ensure it's not soft-deleted if explicitly 'Removed'
+            // *** ADDED THIS LOGIC: Save the email of the user who performed the removal ***
+            if (req.user && req.user.email) {
+                updateFields.removedByEmail = req.user.email;
+            } else {
+                // Fallback or error if user email not available (shouldn't happen with auth)
+                updateFields.removedByEmail = 'Unknown User';
+            }
+        } else {
+            // If status is changed from 'Removed' to something else, clear removal info
+            updateFields.status = status;
+            updateFields.removalDate = undefined; // Clear the field
+            updateFields.originalStatus = undefined; // Clear the field
+            updateFields.removedByEmail = undefined; // *** Clear this field too ***
+        }
+
+        const updatedEquipment = await Equipment.findByIdAndUpdate(
+            req.params.id,
+            updateFields, // Use the constructed updateFields object
+            { new: true, runValidators: true }
+        );
+
         if (!updatedEquipment) return res.status(404).json({ message: 'Equipment not found' });
         res.json(updatedEquipment);
     } catch (err) {
@@ -286,6 +344,7 @@ app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (r
     }
 });
 
+// Original DELETE route (soft delete) - this marks as isDeleted: true
 app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res) => {
     try {
         const softDeletedEquipment = await Equipment.findByIdAndUpdate(
@@ -302,6 +361,7 @@ app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res
         res.status(500).json({ message: err.message });
     }
 });
+
 app.get('/api/equipment/grouped-by-email', auth, async (req, res) => {
   try {
     const groupedData = await Equipment.aggregate([
