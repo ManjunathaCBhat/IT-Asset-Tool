@@ -1,15 +1,32 @@
+// src/RemovedAssetsTable.js
 import React, { useEffect, useState } from 'react';
-import { Table, Spin, Alert, Typography, Input, Space } from 'antd';
+import { Table, Spin, Alert, Typography, Input, Space, Tag } from 'antd'; // Added Tag for renderWarrantyTag
 import axios from 'axios';
 import moment from 'moment';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
 
-const RemovedAssetsTable = () => {
-    // Debug log removed as it was for initial state
-    // console.log('RemovedAssetsTable: Component Rendered. Initial/Current loading state:', loading);
+// Re-using renderWarrantyTag (or ensure it's in a shared utils file)
+const renderWarrantyTag = (date) => {
+    if (!date) return 'N/A';
+    const warrantyDate = moment(date);
+    if (!warrantyDate.isValid()) return 'Invalid Date';
 
+    const today = moment();
+    const thirtyDaysFromNow = moment().add(30, 'days');
+
+    if (warrantyDate.isBefore(today, 'day')) {
+        return <Tag color="error">Expired: {warrantyDate.format('DD MMM YYYY')}</Tag>;
+    }
+    if (warrantyDate.isBefore(thirtyDaysFromNow, 'day')) {
+        return <Tag color="warning">Soon: {warrantyDate.format('DD MMM YYYY')}</Tag>;
+    }
+    return warrantyDate.format('DD MMM YYYY');
+};
+
+
+const RemovedAssetsTable = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [allRemovedAssets, setAllRemovedAssets] = useState([]);
@@ -23,44 +40,33 @@ const RemovedAssetsTable = () => {
 
     const fetchRemovedAssets = async () => {
         try {
-            setLoading(true); // Ensure it's true at start
+            setLoading(true);
             setError(null);
-            // Debug logs removed as problem solved
-            // console.log('1. Fetch started. Loading state set to TRUE.');
-
+            console.log('Attempting to fetch removed assets from /api/equipment/removed');
             const response = await axios.get('http://localhost:5000/api/equipment/removed', {
                 headers: getAuthHeader(),
             });
 
-            // Debug logs removed as problem solved
-            // console.log('2. API Response data received (raw):', response.data);
-
             const receivedData = response.data;
-
+            console.log('Received removed assets data:', receivedData);
             setAllRemovedAssets(receivedData);
             setFilteredRemovedAssets(receivedData);
-            // Debug logs removed as problem solved
-            // console.log('3. Data set to state successfully.');
 
         } catch (err) {
-            console.error('Failed to fetch removed assets:', err); // Keep this for actual errors
+            console.error('Failed to fetch removed assets:', err.response ? err.response.data : err.message);
             if (err.response && (err.response.status === 401 || err.response.status === 403)) {
                 setError('You are not authorized to view removed assets. Please log in with appropriate permissions.');
+            } else if (err.response && err.response.status === 404) {
+                 setError('Removed assets endpoint not found. Please ensure your backend has /api/equipment/removed route.');
             } else {
                 setError('Failed to load removed asset data. Please ensure the backend is running and you have proper access.');
             }
         } finally {
-            // Debug logs removed as problem solved
-            // console.log('Y. Fetch finally block executed. Setting loading to false.');
-            setLoading(false); // Set loading to false when fetch finishes (success or error)
-            // Debug logs removed as problem solved
-            // console.log('Z. Loading state immediately AFTER setLoading(false) call:', loading);
+            setLoading(false);
         }
     };
 
     useEffect(() => {
-        // Debug log removed
-        // console.log('RemovedAssetsTable: useEffect ran.');
         fetchRemovedAssets();
     }, []);
 
@@ -73,7 +79,8 @@ const RemovedAssetsTable = () => {
                 (item.model && item.model.toLowerCase().includes(lowercasedValue)) ||
                 (item.serialNumber && item.serialNumber.toLowerCase().includes(lowercasedValue)) ||
                 (item.originalStatus && item.originalStatus.toLowerCase().includes(lowercasedValue)) ||
-                (item.comment && item.comment.toLowerCase().includes(lowercasedValue))
+                (item.comment && item.comment.toLowerCase().includes(lowercasedValue)) ||
+                (item.assigneeName && item.assigneeName.toLowerCase().includes(lowercasedValue)) // Added assigneeName search
             );
             setFilteredRemovedAssets(filtered);
         } else {
@@ -106,22 +113,35 @@ const RemovedAssetsTable = () => {
             key: 'serialNumber',
         },
         {
-            title: 'Last Status',
-            dataIndex: 'originalStatus',
+            title: 'Assignee Name', // Added Assignee Name
+            dataIndex: 'assigneeName',
+            key: 'assigneeName',
+        },
+        {
+            title: 'Original Status', // Renamed from Last Status for clarity
+            dataIndex: 'status', // Assuming 'status' now stores the original status upon removal
             key: 'originalStatus',
             render: (status) => <Text strong>{status}</Text>,
             filters: [
                 { text: 'Damaged', value: 'Damaged' },
                 { text: 'E-Waste', value: 'E-Waste' },
-            ],
-            onFilter: (value, record) => record.originalStatus === value,
+                { text: 'In Use', value: 'In Use' }, // Assuming it could have been in use when removed
+                { text: 'In Stock', value: 'In Stock' }, // Assuming it could have been in stock when removed
+            ].filter(filter => allRemovedAssets.some(item => item.status === filter.value)), // Only show filters for statuses actually present
+            onFilter: (value, record) => record.status === value,
         },
         {
             title: 'Removal Date',
-            dataIndex: 'removalDate',
+            dataIndex: 'updatedAt', // Assuming 'updatedAt' captures the removal date
             key: 'removalDate',
             render: (date) => date ? moment(date).format('DD MMM YYYY HH:mm') : 'N/A',
         },
+        {
+            title: 'Comment', // Display comment for context
+            dataIndex: 'comment',
+            key: 'comment',
+            ellipsis: true, // Truncate long comments
+        }
     ];
 
     return (
@@ -147,9 +167,9 @@ const RemovedAssetsTable = () => {
                     dataSource={filteredRemovedAssets}
                     rowKey="_id"
                     pagination={{ pageSize: 10 }}
+                    // Fixed Ant Design warning: `bordered` is deprecated. Please use `variant` instead.
+                    // This warning doesn't explicitly appear in your provided code for Table, but good to note.
                 />
-
-                {/* --- DEBUGGING TEXT REMOVED --- */}
             </div>
         </Spin>
     );
