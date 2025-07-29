@@ -1,3 +1,4 @@
+// src/App.js
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Spin, message } from 'antd';
@@ -7,16 +8,16 @@ import axios from 'axios';
 import AppLayout from './AppLayout';
 import LoginPage from './LoginPage';
 import Dashboard from './Dashboard';
-import MasterView from './MasterView';
-import AddEquipment from './AddEquipment'; // Assuming path remains same
-import UserManagement from './UserManagement';
+import MasterView from './MasterView'; // Assuming this exists
+import AddEquipment from './AddEquipment'; // Assuming this exists
+import UserManagement from './UserManagement'; // Assuming this exists
 import InStockView from './InStockView';
 import InUse from './InUse';
-import DamagedProducts from './DamagedProducts';
-import EWaste from './EWaste';
-import WelcomePage from './WelcomePage';
-import RemovedAssetsTable from './RemovedAssetsTable'; // CORRECTED PATH: Removed 'components/'
-import ResetPasswordPage from './ResetPasswordPage';
+import DamagedProducts from './DamagedProducts'; // Assuming this exists
+import EWaste from './EWaste'; // Assuming this exists
+import WelcomePage from './WelcomePage'; // Assuming this exists
+import ResetPasswordPage from './ResetPasswordPage'; // Assuming this exists
+import RemovedAssetsTable from './RemovedAssetsTable'; // Assuming this exists
 
 const App = () => {
     const [user, setUser] = useState(null);
@@ -41,8 +42,8 @@ const App = () => {
             });
             setExpiringItems(response.data);
         } catch (error) {
-            console.error('Error fetching expiring items:', error);
-            // Optionally show a message to the user
+            console.error('Error fetching expiring items:', error.response ? error.response.data : error.message);
+            // Optionally show a message to the user, but handle 400 errors from backend specifically if needed
         }
     };
 
@@ -54,7 +55,7 @@ const App = () => {
                 const parsedUser = JSON.parse(userData);
                 setUser(parsedUser);
                 axios.defaults.headers.common['x-auth-token'] = token;
-                fetchExpiringItems(token);
+                fetchExpiringItems(token); // Fetch expiring items on initial load if user is logged in
             } catch (e) {
                 console.error("Failed to parse user from localStorage", e);
                 localStorage.removeItem('user');
@@ -69,12 +70,13 @@ const App = () => {
         localStorage.setItem('user', JSON.stringify(data.user));
         setUser(data.user);
         axios.defaults.headers.common['x-auth-token'] = data.token;
-        fetchExpiringItems(data.token);
+        fetchExpiringItems(data.token); // Fetch expiring items after successful login
     };
 
     // --- Render Logic ---
     if (loading) {
-        return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><Spin size="large" /></div>;
+        // Antd Spin tip warning fix: Use fullscreen or nested pattern
+        return <Spin spinning={true} size="large" tip="Loading..." fullscreen />;
     }
 
     return (
@@ -86,9 +88,8 @@ const App = () => {
                     <>
                         <Route path="/" element={<WelcomePage />} />
                         <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
-                        <Route path="/reset-password" element={<ResetPasswordPage />} />
-                        {/* Ensure any unknown paths for unauthenticated users also go to Welcome */}
                         <Route path="*" element={<Navigate to="/" replace />} />
+                        <Route path="/reset-password" element={<ResetPasswordPage />} />
                     </>
                 ) : (
                     // --- Routes for AUTHENTICATED users ---
@@ -104,12 +105,12 @@ const App = () => {
                     >
                         {/* Dashboard is now the default child route for authenticated users */}
                         <Route index element={<Dashboard />} />
-                        {/* Other routes become children of AppLayout */}
-                        <Route path="all-assets" element={<MasterView user={user} setExpiringItems={setExpiringItems} />} />
+                        <Route path="all-assets" element={<MasterView user={user} />} />
                         <Route path="in-stock" element={<InStockView user={user} />} />
                         <Route path="in-use" element={<InUse user={user} />} />
                         <Route path="damaged" element={<DamagedProducts user={user} />} />
                         <Route path="e-waste" element={<EWaste user={user} />} />
+                        <Route path="removed" element={<RemovedAssetsTable user={user} />} /> {/* New route for removed assets */}
                         <Route
                             path="add"
                             element={
@@ -126,9 +127,6 @@ const App = () => {
                                 : <Navigate to="/" />
                             }
                         />
-                        {/* NEW: Route for Removed Assets Table */}
-                        <Route path="removed" element={<RemovedAssetsTable />} />
-
                         {/* Fallback to Dashboard for any unknown paths for authenticated users */}
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>

@@ -1,12 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Card, Col, Row, Statistic, Typography, Spin, Alert, Button, Space, List } from 'antd';
+import { Card, Col, Row, Statistic, Typography, Spin, Alert, Button, Space, List, Tag } from 'antd';
 import {
     DatabaseOutlined, CheckCircleOutlined, ToolOutlined, WarningOutlined, DeleteOutlined,
-    LaptopOutlined, DesktopOutlined,
-    AudioOutlined, BlockOutlined, // Corrected imports for Headset and Mouse (generic)
-} from '@ant-design/icons';
-// Removed useNavigate as the + button is removed and no longer redirects
-// import { useNavigate } from 'react-router-dom'; // No longer needed
+    LaptopOutlined, DesktopOutlined, AudioOutlined,
+    // NEW ICONS FOR KEYBOARD AND MOUSE
+    AimOutlined, BorderlessTableOutlined // Used for Mouse and Keyboard respectively
+} from '@ant-design/icons'; // Ensure these icons are imported
 import axios from 'axios';
 import moment from 'moment';
 
@@ -18,9 +17,27 @@ const getStatusColor = (status) => {
         'In Use': '#7ED321',
         'In Stock': '#FA8C16', // Orange
         'Damaged': '#D0021B', // Red
-        'E-Waste': '#8B572A'  // Brown
+        'E-Waste': '#8B572A',  // Brown
+        'Removed': '#555555' // Dark gray for Removed status
     };
     return colors[status] || 'rgba(0, 0, 0, 0.85)'; // Default text color if no specific color is found
+};
+
+const renderWarrantyTag = (date) => {
+    if (!date) return 'N/A';
+    const warrantyDate = moment(date);
+    if (!warrantyDate.isValid()) return 'Invalid Date';
+
+    const today = moment();
+    const thirtyDaysFromNow = moment().add(30, 'days');
+
+    if (warrantyDate.isBefore(today, 'day')) {
+        return <Tag color="error">Expired: {warrantyDate.format('DD MMM YYYY')}</Tag>;
+    }
+    if (warrantyDate.isBefore(thirtyDaysFromNow, 'day')) {
+        return <Tag color="warning">Soon: {warrantyDate.format('DD MMM YYYY')}</Tag>;
+    }
+    return warrantyDate.format('DD MMM YYYY');
 };
 
 // --- Helper function for grouping and counting by category ---
@@ -36,7 +53,8 @@ const summarizeByCategory = (assets) => {
                 inStock: 0,
                 damaged: 0,
                 eWaste: 0,
-                total: 0 // Keep total for (Total) in card title
+                removed: 0,
+                total: 0
             };
         }
 
@@ -53,16 +71,18 @@ const summarizeByCategory = (assets) => {
             case 'E-Waste':
                 categorySummary[category].eWaste++;
                 break;
+            case 'Removed':
+                categorySummary[category].removed++;
+                break;
             default:
-                // For statuses not explicitly mapped, they won't be displayed on the card
-                // but will still contribute to the 'total' for the category
                 break;
         }
         categorySummary[category].total++;
     });
 
     // Explicitly add desired categories to ensure they always show up, even with 0 items.
-    const desiredCategories = ['Laptop', 'Headset', 'Mouse', 'Monitor', 'Uncategorized'];
+    // ADDED 'Keyboard' to desiredCategories
+    const desiredCategories = ['Laptop', 'Headset', 'Mouse', 'Monitor', 'Keyboard', 'Uncategorized'];
     desiredCategories.forEach(cat => {
         if (!categorySummary[cat]) {
             categorySummary[cat] = {
@@ -71,6 +91,7 @@ const summarizeByCategory = (assets) => {
                 inStock: 0,
                 damaged: 0,
                 eWaste: 0,
+                removed: 0,
                 total: 0
             };
         }
@@ -82,17 +103,19 @@ const summarizeByCategory = (assets) => {
 // Helper to get icon based on category name
 const getCategoryIcon = (category) => {
     switch (category) {
-        case 'Computer': // Keep Computer as it might be a general category name in your data
+        case 'Computer':
         case 'Laptop':
-            return <LaptopOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />; // Blue
+            return <LaptopOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />;
         case 'Headset':
-            return <AudioOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />; // Audio icon
+            return <AudioOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />;
         case 'Mouse':
-            return <BlockOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />; // Generic block/device icon
+            return <AimOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />; // CHANGED to AimOutlined
+        case 'Keyboard': // ADDED 'Keyboard' case
+            return <BorderlessTableOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />; // CHANGED to BorderlessTableOutlined
         case 'Monitor':
-            return <DesktopOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />; // Desktop/Monitor icon
+            return <DesktopOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />;
         default:
-            return <DatabaseOutlined style={{ fontSize: '48px', color: '#888' }} />; // Generic icon for others/uncategorized
+            return <DatabaseOutlined style={{ fontSize: '48px', color: '#888' }} />;
     }
 };
 
@@ -104,12 +127,11 @@ const Dashboard = () => {
         inStock: 0,
         damaged: 0,
         eWaste: 0,
+        removed: 0,
     });
     const [categoryAssetSummaries, setCategoryAssetSummaries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-
-    // Removed useNavigate as the + button is removed
 
     const getAuthHeader = useCallback(() => {
         const token = localStorage.getItem('token');
@@ -121,14 +143,14 @@ const Dashboard = () => {
         setError(null);
         try {
             const summaryRes = await axios.get('http://localhost:5000/api/equipment/summary', { headers: getAuthHeader() });
-            setSummaryData(prev => ({ ...prev, ...summaryRes.data, inStock: summaryRes.data.inStock || summaryRes.data.available || 0 }));
+            setSummaryData(summaryRes.data);
 
             const allAssetsRes = await axios.get('http://localhost:5000/api/equipment', { headers: getAuthHeader() });
             const groupedSummary = summarizeByCategory(allAssetsRes.data);
             setCategoryAssetSummaries(groupedSummary);
 
         } catch (err) {
-            console.error('Failed to fetch dashboard data:', err);
+            console.error('Failed to fetch dashboard data:', err.response ? err.response.data : err.message);
             setError('Failed to load dashboard data. Please check your network and backend server.');
         } finally {
             setLoading(false);
@@ -139,8 +161,6 @@ const Dashboard = () => {
         fetchDashboardData();
     }, [fetchDashboardData]);
 
-    // Removed handleAddCategoryAsset function
-
     return (
         <div style={{ padding: '24px', background: '#f0f2f5', minHeight: '100%' }}>
             {error && <Alert message="Error" description={error} type="error" showIcon style={{ marginBottom: '20px' }} />}
@@ -150,7 +170,7 @@ const Dashboard = () => {
             {/* Top Row for Overall Summary Statistics */}
             <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
                 <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card>
+                    <Card variant="outlined" hoverable>
                         <Statistic
                             title="Total Assets"
                             value={summaryData.totalAssets}
@@ -159,7 +179,7 @@ const Dashboard = () => {
                     </Card>
                 </Col>
                 <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card>
+                    <Card variant="outlined" hoverable>
                         <Statistic
                             title="In Use"
                             value={summaryData.inUse}
@@ -168,7 +188,7 @@ const Dashboard = () => {
                     </Card>
                 </Col>
                 <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card>
+                    <Card variant="outlined" hoverable>
                         <Statistic
                             title="In Stock"
                             value={summaryData.inStock}
@@ -177,7 +197,7 @@ const Dashboard = () => {
                     </Card>
                 </Col>
                 <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card>
+                    <Card variant="outlined" hoverable>
                         <Statistic
                             title="Damaged"
                             value={summaryData.damaged}
@@ -186,11 +206,20 @@ const Dashboard = () => {
                     </Card>
                 </Col>
                 <Col xs={24} sm={12} md={8} lg={6} xl={4}>
-                    <Card>
+                    <Card variant="outlined" hoverable>
                         <Statistic
                             title="E-Waste"
                             value={summaryData.eWaste}
                             prefix={<DeleteOutlined style={{ color: '#8B572A' }} />}
+                        />
+                    </Card>
+                </Col>
+                <Col xs={24} sm={12} md={8} lg={6} xl={4}>
+                    <Card variant="outlined" hoverable>
+                        <Statistic
+                            title="Removed"
+                            value={summaryData.removed}
+                            prefix={<DeleteOutlined style={{ color: getStatusColor('Removed') }} />}
                         />
                     </Card>
                 </Col>
@@ -216,15 +245,14 @@ const Dashboard = () => {
                             <Card
                                 title={
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        {/* Combined Category Name and Total Count like "Computer (32)" */}
                                         <Text strong style={{ fontSize: '16px' }}>
                                             {categoryData.category} ({categoryData.total})
                                         </Text>
-                                        {/* Removed + Button from here */}
                                     </div>
                                 }
                                 hoverable
-                                bodyStyle={{ padding: '16px' }}
+                                styles={{ body: { padding: '16px' } }}
+                                variant="outlined"
                             >
                                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
                                     <div style={{ width: '40%', display: 'flex', justifyContent: 'center' }}>
@@ -236,7 +264,8 @@ const Dashboard = () => {
                                             { label: 'In Use', count: categoryData.inUse, color: getStatusColor('In Use') },
                                             { label: 'In Stock', count: categoryData.inStock, color: getStatusColor('In Stock') },
                                             { label: 'Damaged', count: categoryData.damaged, color: getStatusColor('Damaged') },
-                                            { label: 'E-Waste', count: categoryData.eWaste, color: getStatusColor('E-Waste') }, // Directly using E-Waste
+                                            { label: 'E-Waste', count: categoryData.eWaste, color: getStatusColor('E-Waste') },
+                                            { label: 'Removed', count: categoryData.removed, color: getStatusColor('Removed') },
                                         ]}
                                         renderItem={item => (
                                             <List.Item style={{ padding: '4px 0', borderBottom: 'none' }}>
