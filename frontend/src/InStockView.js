@@ -49,14 +49,6 @@ const InStockView = ({ user }) => {
       key: 'warrantyInfo',
       render: renderWarrantyTag,
     },
-     // Action column for each individual asset
-    {
-        title: 'Actions',
-        key: 'actions',
-        render: (text, record) => renderInStockActions(record, () => {/* Assuming fetchDataCallback from PageShell */}),
-        width: 150,
-        align: 'center',
-    },
   ];
 
   const handleAssignClick = (record) => {
@@ -77,10 +69,6 @@ const InStockView = ({ user }) => {
       );
       message.success('Asset assigned successfully!');
       setIsAssignModalVisible(false);
-       // This component relies on PageShell's fetchData to refresh.
-       // The fetchDataCallback would normally be passed from PageShell's renderCustomActions prop.
-       // So, we need to manually trigger PageShell's refresh if PageShell exposes it.
-       // For now, we'll assume PageShell has a refresh mechanism that gets triggered or just rely on re-fetch on component mount if PageShell does it.
     } catch (error) {
       message.error('Assignment failed. Please check the details.');
     }
@@ -98,7 +86,6 @@ const InStockView = ({ user }) => {
       title: `Move this item to ${newStatus}?`,
       onConfirm: async () => {
         try {
-          // You might need to send originalStatus if moving to 'Removed' or 'Damaged'
           await axios.put(
             `http://localhost:5000/api/equipment/${record._id}`,
             { status: newStatus },
@@ -106,7 +93,7 @@ const InStockView = ({ user }) => {
           );
           message.success(`Moved to ${newStatus}`);
           setConfirmationConfig(null);
-          if (fetchDataCallback) fetchDataCallback(); // Trigger PageShell's fetch
+          if (fetchDataCallback) fetchDataCallback();
         } catch (err) {
           message.error(`Failed to update status to ${newStatus}`);
         }
@@ -132,44 +119,38 @@ const InStockView = ({ user }) => {
   ];
 
   return (
-    // Fragment used because Popconfirm might render separately, and Space expects single child
-    <>
-      <Space>
-        <Button
-          type="text"
-          icon={<EyeOutlined style={{ fontSize: '20px' }} />}
-          onClick={() => handleViewDetails(record)}
-          title="View Details"
-        />
+    <Space>
+      <Button
+        type="text"
+        icon={<EyeOutlined style={{ fontSize: '20px' }} />}
+        onClick={() => handleViewDetails(record)}
+        title="View Details"
+      />
 
-        <Button
-          type="text"
-          icon={<EditOutlined style={{ fontSize: '20px' }} />}
-          onClick={() => handleAssignClick(record)}
-          title="Assign"
-        />
+      <Button
+        type="text"
+        icon={<EditOutlined style={{ fontSize: '20px' }} />}
+        onClick={() => handleAssignClick(record)}
+        title="Assign"
+      />
 
-        {/* Ensure only one child for Dropdown */}
-        <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-          <Button type="text" icon={<MoreOutlined style={{ fontSize: '20px' }} />} />
-        </Dropdown>
-      </Space>
+      <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+        <Button type="text" icon={<MoreOutlined style={{ fontSize: '20px' }} />} />
+      </Dropdown>
 
-      {/* Popconfirm is rendered conditionally and separately, to avoid Dropdown limitations */}
       {confirmationConfig?.visible && (
         <Popconfirm
-          open={true} // Control visibility with state
+          open={true}
           title={confirmationConfig.title}
           onConfirm={confirmationConfig.onConfirm}
           onCancel={confirmationConfig.onCancel}
           okText="Yes"
           cancelText="No"
         >
-          {/* An invisible span is needed as a child to Popconfirm when `open` is used */}
           <span />
         </Popconfirm>
       )}
-    </>
+    </Space>
   );
 };
 
@@ -192,8 +173,7 @@ const InStockView = ({ user }) => {
         onOk={handleAssignSubmit}
         onCancel={() => setIsAssignModalVisible(false)}
         okText="Assign"
-        // Corrected: using 'destroyOnHidden' instead of 'destroyOnClose'
-        destroyOnHidden
+        destroyOnClose
       >
         <Form layout="vertical" form={form}>
           <Row gutter={16}>
@@ -252,20 +232,18 @@ const InStockView = ({ user }) => {
         open={isDetailsModalVisible}
         onCancel={() => setIsDetailsModalVisible(false)}
         footer={null}
-        // Corrected: using 'destroyOnHidden' instead of 'destroyOnClose'
-        destroyOnHidden
       >
         {detailsEquipment && (
           <div>
             <p><b>Asset ID:</b> {detailsEquipment.assetId || 'N/A'}</p>
-            <p><b>Model:</b> {detailsEquipment.model || 'N/A'}</p>
-            <p><b>Category:</b> {detailsEquipment.category || 'N/A'}</p>
-            <p><b>Status:</b> {detailsEquipment.status || 'N/A'}</p>
-            <p><b>Serial Number:</b> {detailsEquipment.serialNumber || 'N/A'}</p>
-            <p><b>Warranty Expiry:</b> {renderWarrantyTag(detailsEquipment.warrantyInfo)}</p>
-            <p><b>Location:</b> {detailsEquipment.location || 'N/A'}</p>
-            <p><b>Comment:</b> {detailsEquipment.comment || 'N/A'}</p>
-          </div>
+      <p><b>Model:</b> {detailsEquipment.model || 'N/A'}</p>
+      <p><b>Category:</b> {detailsEquipment.category || 'N/A'}</p>
+      <p><b>Status:</b> {detailsEquipment.status || 'N/A'}</p>
+      <p><b>Serial Number:</b> {detailsEquipment.serialNumber || 'N/A'}</p>
+      <p><b>Warranty Expiry:</b> {renderWarrantyTag(detailsEquipment.warrantyInfo)}</p>
+      <p><b>Location:</b> {detailsEquipment.location || 'N/A'}</p>
+      <p><b>Comment:</b> {detailsEquipment.comment || 'N/A'}</p>
+    </div>
         )}
       </Modal>
     </>
