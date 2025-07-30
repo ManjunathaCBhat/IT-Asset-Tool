@@ -151,7 +151,10 @@ const RemovedAssetsTable = () => {
                 {error && <Alert message="Error" description={error} type="error" showIcon style={{ marginBottom: 16 }} />}
 
                 <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                    <Title level={3}>Removed Assets</Title>
+                    <Title level={3}>Removed Assets -</Title>
+                    <div style={{ marginTop: 14,  marginLeft: 1, color: '#888', fontSize: 14 }}>
+                    Implies the asset has left the organization's control, either through sale, donation, or disposal.
+                    </div>
                     <Search
                         placeholder="Search removed assets..."
                         onSearch={handleSearch}
