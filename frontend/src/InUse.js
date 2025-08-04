@@ -429,7 +429,7 @@ const InUse = () => {
       >
         <Form form={editViewForm} layout="vertical">
           <Row gutter={16}> {/* Use Row/Col for 2 columns */}
-            
+
             <Col span={12}><Form.Item label="Model" name="model" rules={[{ required: true }]}><Input disabled={isViewOnlyModal} /></Form.Item></Col>
             <Col span={12}><Form.Item label="Category" name="category" rules={[{ required: true }]}><Input disabled={isViewOnlyModal} /></Form.Item></Col>
             <Col span={12}><Form.Item label="Serial Number" name="serialNumber" rules={[{ required: true }]}><Input disabled={isViewOnlyModal} /></Form.Item></Col>

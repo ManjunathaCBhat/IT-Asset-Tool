@@ -1,279 +1,252 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import {
-  Button,
-  Modal,
-  Form,
-  Input,
-  Row,
-  Col,
-  message,
-  Space,
-  Dropdown,
-  Popconfirm,
-  Tag,
-  Typography,
-  Table,
+  Table, Tag, Typography, Modal, Button, Space, Form,
+  Input, message, Dropdown, Popconfirm, Menu, Row, Col, DatePicker, Select
 } from 'antd';
 import {
-  WarningOutlined,
-  DeleteOutlined,
-  EyeOutlined,
-  EditOutlined,
-  MoreOutlined,
-  InfoCircleOutlined, UserAddOutlined,
+  SearchOutlined, EyeOutlined, MoreOutlined, InfoCircleOutlined, UserAddOutlined,
+  WarningOutlined as DamagedIcon, DeleteOutlined as EWasteIcon, EditOutlined
 } from '@ant-design/icons';
 import moment from 'moment';
 
-const { Text } = Typography;
+const { Title } = Typography;
+const { Option } = Select;
 
-// Helper for auth header
+// Auth header helper
 const getAuthHeader = () => {
   const token = localStorage.getItem('token');
   return token ? { 'x-auth-token': token } : {};
 };
 
-// Render warranty tag with color indicators
+// Warranty tag logic
 const renderWarrantyTag = (date) => {
-  if (!date) return <Text disabled>N/A</Text>;
-  const warrantyDate = moment(date, 'YYYY-MM-DD');
-  if (!warrantyDate.isValid()) return <Text disabled>Invalid Date</Text>;
+  if (!date) return 'N/A';
+  const warrantyDate = moment(date);
+  if (!warrantyDate.isValid()) return 'Invalid Date';
   const today = moment();
-  const thirtyDaysFromNow = moment().add(30, 'days');
-  if (warrantyDate.isBefore(today)) {
+  const thirty = moment().add(30, 'days');
+  if (warrantyDate.isBefore(today, 'day')) {
     return <Tag color="error">Expired: {warrantyDate.format('DD MMM YYYY')}</Tag>;
   }
-  if (warrantyDate.isBefore(thirtyDaysFromNow)) {
-    return <Tag color="warning">Expires: {warrantyDate.format('DD MMM YYYY')}</Tag>;
+  if (warrantyDate.isBefore(thirty, 'day')) {
+    return <Tag color="warning">Soon: {warrantyDate.format('DD MMM YYYY')}</Tag>;
   }
   return warrantyDate.format('DD MMM YYYY');
 };
 
+// Status color helper
+const getStatusColor = (status) => ({
+  'In Use': '#7ED321',
+  'In Stock': '#FA8C16',
+  Damaged: '#D0021B',
+  'E-Waste': '#8B572A',
+  Removed: '#555555'
+}[status] || 'default');
+
 // Group assets by model
 const groupAssetsByModel = (assets) => {
   const grouped = assets.reduce((acc, asset) => {
-    const modelKey = asset.model || 'Unknown Model';
-    if (!acc[modelKey]) {
-      acc[modelKey] = {
-        model: modelKey,
+    const key = asset.model || 'Unknown Model';
+    if (!acc[key]) {
+      acc[key] = {
+        model: key,
         category: asset.category || '',
         assets: [],
       };
     }
-    acc[modelKey].assets.push(asset);
+    acc[key].assets.push(asset);
     return acc;
   }, {});
   return Object.values(grouped);
 };
 
-const InStockView = ({ user }) => {
-  // State for asset data and UI
+const InStockView = () => {
+  // Data and state
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [groupedList, setGroupedList] = useState([]);
-const [assetForInfoDetails, setAssetForInfoDetails] = useState(null);
-  // Modal and form states
-  const [isAssignModalVisible, setIsAssignModalVisible] = useState(false);
-  const [selectedEquipment, setSelectedEquipment] = useState(null);
-  const [form] = Form.useForm();
-   const [infoForm] = Form.useForm();
-   const { Title } = Typography;
 
-  const [isDetailsModalVisible, setIsDetailsModalVisible] = useState(false);
-  const [detailsEquipment, setDetailsEquipment] = useState(null);
-
-  const [isModelAssetsModalVisible, setIsModelAssetsModalVisible] = useState(false);
+  // Modals and form states
+  const [isAnyModalOpen, setIsAnyModalOpen] = useState(false);
+  const [modalAssetsVisible, setModalAssetsVisible] = useState(false);
   const [selectedModelAssets, setSelectedModelAssets] = useState(null);
 
-  // State controlling external Popconfirm for status changes
-  const [confirmationConfig, setConfirmationConfig] = useState(null);
+  const [isAssignModalVisible, setIsAssignModalVisible] = useState(false);
+  const [assetToAssign, setAssetToAssign] = useState(null);
+  const [assignForm] = Form.useForm();
 
-  // Fetch in-stock assets from API
-  const fetchInStockAssets = useCallback(async () => {
+  const [isInfoModalVisible, setIsInfoModalVisible] = useState(false);
+  const [assetForInfo, setAssetForInfo] = useState(null);
+
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [assetToEdit, setAssetToEdit] = useState(null);
+  const [editForm] = Form.useForm();
+
+  // Fetch all In Stock assets
+  const fetchAssets = useCallback(async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/equipment', {
-        headers: getAuthHeader(),
-      });
-      const inStockAssets = response.data.filter((item) => item.status === 'In Stock');
-      setData(inStockAssets);
-      setFilteredData(inStockAssets);
-    } catch (error) {
+      const response = await axios.get('http://localhost:5000/api/equipment', { headers: getAuthHeader() });
+      const list = response.data.filter(a => a.status === 'In Stock');
+      setData(list);
+      setFilteredData(list);
+    } catch (err) {
       message.error('Failed to fetch In Stock assets.');
-      console.error(error);
     }
   }, []);
 
-  useEffect(() => {
-    fetchInStockAssets();
-  }, [fetchInStockAssets]);
+  useEffect(() => { fetchAssets(); }, [fetchAssets]);
 
-  // Filter assets based on search input
+  useEffect(() => {
+    setIsAnyModalOpen(isAssignModalVisible || modalAssetsVisible || isInfoModalVisible || isEditModalVisible);
+  }, [isAssignModalVisible, modalAssetsVisible, isInfoModalVisible, isEditModalVisible]);
+
+  // Filtering logic
   const handleSearch = (e) => {
-    const value = e.target.value;
+    const { value } = e.target;
     setSearchTerm(value);
-    const filtered = data.filter((asset) =>
-      Object.values(asset).some((val) =>
-        val ? String(val).toLowerCase().includes(value.toLowerCase()) : false
+    const lower = value.trim().toLowerCase();
+    if (!lower) {
+      setFilteredData(data);
+      return;
+    }
+    setFilteredData(data.filter(item =>
+      Object.values(item).some(field =>
+        String(field || '').toLowerCase().includes(lower)
       )
-    );
-    setFilteredData(filtered);
+    ));
   };
 
-  // Update grouped list whenever filteredData changes
-  useEffect(() => {
-    setGroupedList(groupAssetsByModel(filteredData));
-  }, [filteredData]);
+  const groupedList = groupAssetsByModel(filteredData);
 
-  // When clicking on a grouped row 'View' icon, open modal showing nested assets
-  const handleViewModelAssets = (record) => {
-    setSelectedModelAssets(record);
-    setIsModelAssetsModalVisible(true);
-  };
-
-  // Handle assign modal open
-  const handleAssignClick = (record) => {
-    setSelectedEquipment(record);
-    form.resetFields();
+  // Assign modal open/submit
+  const handleAssign = (asset) => {
+    setAssetToAssign(asset);
+    assignForm.resetFields();
     setIsAssignModalVisible(true);
-    setConfirmationConfig(null);
   };
 
-  // Submit assignment form
   const handleAssignSubmit = async () => {
     try {
-      const values = await form.validateFields();
-      const updatedData = { ...values, status: 'In Use' };
+      const values = await assignForm.validateFields();
       await axios.put(
-        `http://localhost:5000/api/equipment/${selectedEquipment._id}`,
-        updatedData,
+        `http://localhost:5000/api/equipment/${assetToAssign._id}`,
+        { ...values, status: 'In Use' },
         { headers: getAuthHeader() }
       );
-      message.success('Asset assigned successfully!');
       setIsAssignModalVisible(false);
-      fetchInStockAssets();
-    } catch (error) {
-      message.error('Assignment failed. Please check the details.');
-      console.error(error);
+      setAssetToAssign(null);
+      message.success('Asset assigned.');
+      setTimeout(fetchAssets, 250); // Wait for DB
+    } catch {
+      message.error('Failed to assign.');
     }
   };
 
-  // Show details modal
-  const handleViewDetails = (record) => {
-    setAssetForInfoDetails(record);
-    setDetailsEquipment(record);
-    setIsDetailsModalVisible(true);
-  };
-
-  // Show confirmation popup for status changes
-  const confirmStatusChange = (record, newStatus, fetchDataCallback) => {
-    setConfirmationConfig({
-      visible: true,
-      title: `Move asset "${record.model} (${record.serialNumber})" to ${newStatus}?`,
-      onConfirm: async () => {
-        try {
-          await axios.put(
-            `http://localhost:5000/api/equipment/${record._id}`,
-            { status: newStatus },
-            { headers: getAuthHeader() }
-          );
-          message.success(`Moved to ${newStatus}`);
-          setConfirmationConfig(null);
-          if (fetchDataCallback) fetchDataCallback();
-        } catch (err) {
-          message.error(`Failed to update status to ${newStatus}`);
-          setConfirmationConfig(null);
-          console.error(err);
-        }
-      },
-      onCancel: () => setConfirmationConfig(null),
+  // Edit modal open/save (2 columns)
+  const handleEdit = (asset) => {
+    setAssetToEdit(asset);
+    editForm.setFieldsValue({
+      ...asset,
+      warrantyInfo: asset.warrantyInfo ? moment(asset.warrantyInfo) : null,
+      purchaseDate: asset.purchaseDate ? moment(asset.purchaseDate) : null,
     });
+    setIsEditModalVisible(true);
+  };
+  const handleEditSubmit = async () => {
+    try {
+      const values = await editForm.validateFields();
+      await axios.put(
+        `http://localhost:5000/api/equipment/${assetToEdit._id}`,
+        {
+          ...values,
+          warrantyInfo: values.warrantyInfo && moment(values.warrantyInfo).format('YYYY-MM-DD'),
+          purchaseDate: values.purchaseDate && moment(values.purchaseDate).format('YYYY-MM-DD'),
+        },
+        { headers: getAuthHeader() }
+      );
+      setIsEditModalVisible(false);
+      setAssetToEdit(null);
+      message.success('Asset updated.');
+      setTimeout(fetchAssets, 200);
+    } catch {
+      message.error('Update failed!');
+    }
   };
 
-  // Render actions for individual assets in nested modal
-  const renderInStockActions = (record) => {
-    const handleMoveStatus = async (record, newStatus) => {
-      try {
-        await axios.put(
-          `http://localhost:5000/api/equipment/${record._id}`,
-          { status: newStatus },
-          { headers: getAuthHeader() }
-        );
-        message.success(`Moved to ${newStatus}`);
-        fetchInStockAssets();
-      } catch (error) {
-        message.error(`Failed to update status to ${newStatus}`);
-        console.error(error);
-      }
-    };
-
-    const menuItems = [
-      {
-        key: 'damage',
-        label: (
-          <Popconfirm
-            title={`Move asset "${record.model} (${record.serialNumber})" to Damaged?`}
-            onConfirm={() => handleMoveStatus(record, 'Damaged')}
-            okText="Yes"
-            cancelText="No"
-            placement="top"
-            popupAlign={{ offset: [10, -40] }}
-          >
-            <span style={{ color: 'red' }}>
-              <WarningOutlined /> Move to Damaged
-            </span>
-          </Popconfirm>
-        ),
-      },
-      {
-        key: 'ewaste',
-        label: (
-          <Popconfirm
-            title={`Move asset "${record.model} (${record.serialNumber})" to E-Waste?`}
-            onConfirm={() => handleMoveStatus(record, 'E-Waste')}
-            okText="Yes"
-            cancelText="No"
-            placement="top"
-            popupAlign={{ offset: [10, -70] }}
-          >
-            <span style={{ color: '#8B572A' }}>
-              <DeleteOutlined /> Move to E-Waste
-            </span>
-          </Popconfirm>
-        ),
-      },
-    ];
-
-    return (
-      <Space>
-        <Button
-          type="text"
-          icon={<InfoCircleOutlined style={{ color: '#1890ff', fontSize: '18px' }} />}
-          onClick={() => handleViewDetails(record)}
-          title="View Details"
-        />
-        <Button
-          type="text"
-          icon={<UserAddOutlined style={{ fontSize: '18px' }} />}
-          onClick={() => handleAssignClick(record)}
-          title="Assign"
-        />
-        <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-          <Button type="text" icon={<MoreOutlined style={{ fontSize: '20px' }} />} />
-        </Dropdown>
-      </Space>
-    );
+  // Actions: Move asset to status
+  const handleMoveStatus = async (asset, newStatus) => {
+    try {
+      await axios.put(
+        `http://localhost:5000/api/equipment/${asset._id}`,
+        { status: newStatus },
+        { headers: getAuthHeader() }
+      );
+      setIsAssignModalVisible(false);
+      setIsEditModalVisible(false);
+      setIsInfoModalVisible(false);
+      setModalAssetsVisible(false);
+      message.success(`Moved to ${newStatus}`);
+      setTimeout(fetchAssets, 250);
+    } catch {
+      message.error('Status update failed.');
+    }
   };
 
-  // Columns of main grouped table by model
+  // Info view WITHOUT assignee details per your request
+  const handleInfo = (asset) => {
+    setAssetForInfo(asset);
+    setIsInfoModalVisible(true);
+  };
+
+  // Actions for asset in nested modal
+  const renderAssetActions = (asset) => (
+    <Space>
+      <Button icon={<UserAddOutlined />} onClick={() => handleAssign(asset)} title="Assign to user" />
+      <Button icon={<EditOutlined />} onClick={() => handleEdit(asset)} title="Edit asset" />
+      <Button icon={<InfoCircleOutlined style={{ color: '#1890ff' }} />} onClick={() => handleInfo(asset)} title="Full Details" />
+      <Dropdown
+        overlay={
+          <Menu>
+            <Menu.Item key="damage">
+              <Popconfirm
+                title="Move asset to Damaged?"
+                onConfirm={() => handleMoveStatus(asset, 'Damaged')}
+                okText="Yes"
+                cancelText="No"
+                placement="top"
+              >
+                <span style={{ color: 'red' }}>
+                  <DamagedIcon /> Move to Damaged
+                </span>
+              </Popconfirm>
+            </Menu.Item>
+            <Menu.Item key="ewaste">
+              <Popconfirm
+                title="Move asset to E-Waste?"
+                onConfirm={() => handleMoveStatus(asset, 'E-Waste')}
+                okText="Yes"
+                cancelText="No"
+                placement="top"
+              >
+                <span style={{ color: '#8B572A' }}>
+                  <EWasteIcon /> Move to E-Waste
+                </span>
+              </Popconfirm>
+            </Menu.Item>
+          </Menu>
+        }
+        trigger={['click']}
+        placement="bottomRight"
+      >
+        <Button icon={<MoreOutlined />} />
+      </Dropdown>
+    </Space>
+  );
+
+  // Main grouped table columns
   const columns = [
-    {
-      title: 'Sl No',
-      key: 'slno',
-      render: (_, __, index) => index + 1,
-      width: 70,
-      fixed: 'left',
-    },
+    { title: 'Sl No', key: 'slno', render: (_, __, i) => i + 1, width: 70 },
     { title: 'Model', dataIndex: 'model', key: 'model' },
     { title: 'Category', dataIndex: 'category', key: 'category' },
     {
@@ -284,227 +257,249 @@ const [assetForInfoDetails, setAssetForInfoDetails] = useState(null);
     {
       title: 'Actions',
       key: 'actions',
-      render: (_, record) => (
+      render: (_, rec) => (
         <Button
           type="link"
           icon={<EyeOutlined style={{ color: 'blue', fontSize: '18px' }} />}
-          onClick={() => handleViewModelAssets(record)}
-          title="View Assets"
+          onClick={() => { setSelectedModelAssets(rec); setModalAssetsVisible(true); }}
+          title='View Assets'
         />
       ),
-    },
+    }
   ];
 
-  // Columns of nested asset table inside modal
-  const modelAssetListColumns = [
+  // Nested individual asset columns WITHOUT purchase date column
+  const modelAssetColumns = [
     {
       title: 'Sl No',
-      key: 'nestedSlNo',
-      render: (_, __, index) => index + 1,
-      width: 70,
+      key: 'assetNo',
+      render: (_, __, i) => i + 1,
+      width: 60,
     },
-    { title: 'Serial Number', dataIndex: 'serialNumber', key: 'serialNumber' },
-    {
-      title: 'Purchase Date',
-      dataIndex: 'purchaseDate',
-      key: 'purchaseDate',
-      render: (date) => (date ? moment(date).format('YYYY-MM-DD') : 'N/A'),
-    },
-    {
-      title: 'Warranty Expiry',
-      dataIndex: 'warrantyInfo',
-      key: 'warrantyInfo',
-      render: renderWarrantyTag,
-    },
+    { title: 'Serial #', dataIndex: 'serialNumber', key: 'serialNumber' },
+    { title: 'Warranty', dataIndex: 'warrantyInfo', key: 'warrantyInfo', render: renderWarrantyTag },
+    { title: 'Location', dataIndex: 'location', key: 'location' },
     {
       title: 'Actions',
-      key: 'individualAssetActions',
-      render: (_, record) => renderInStockActions(record),
-    },
+      key: 'assetActions',
+      render: (_, a) => renderAssetActions(a),
+      align: 'center'
+    }
   ];
+
+  // Asset info table WITHOUT assignee details
+  const assetToRows = asset => [
+    ['Asset ID', asset.assetId || 'N/A'],
+    ['Category', asset.category || 'N/A'],
+    ['Model', asset.model || 'N/A'],
+    ['Serial Number', asset.serialNumber || 'N/A'],
+    ['Location', asset.location || 'N/A'],
+    ['Status', asset.status || 'N/A'],
+    ['Purchase Price', asset.purchasePrice || 'N/A'],
+    ['Warranty Expiry', asset.warrantyInfo ? moment(asset.warrantyInfo).format('DD MMM YYYY') : 'N/A'],
+    ['Comment', asset.comment || 'N/A'],
+    ['Damage Description', asset.damageDescription || 'N/A'],
+    ['Created At', asset.createdAt ? moment(asset.createdAt).format('DD MMM YYYY HH:mm') : 'N/A'],
+    ['Updated At', asset.updatedAt ? moment(asset.updatedAt).format('DD MMM YYYY HH:mm') : 'N/A'],
+  ];
+
+  const InfoTable = ({ asset }) => (
+    <Table
+      style={{ margin: 0 }}
+      bordered
+      dataSource={assetToRows(asset).map(([label, value], idx) => ({ key: idx, label, value }))}
+      pagination={false}
+      showHeader={false}
+      columns={[
+        { dataIndex: 'label', key: 'label', width: 200, render: text => <strong>{text}</strong> },
+        { dataIndex: 'value', key: 'value' },
+      ]}
+      size="middle"
+    />
+  );
 
   return (
     <>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Col>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            In-Stock Equipment
-          </Typography.Title>
-        </Col>
-        <Col>
-          <Input.Search
-            placeholder="Search all fields..."
-            value={searchTerm}
-            onChange={handleSearch}
-            allowClear
-            style={{ width: 300 }}
-          />
-        </Col>
-      </Row>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <Title level={4} style={{ margin: 0 }}>In Stock Equipment</Title>
+        <Input
+          placeholder="Search all fields..."
+          prefix={<SearchOutlined />}
+          value={searchTerm}
+          onChange={handleSearch}
+          style={{ width: 250 }}
+          allowClear
+        />
+      </div>
 
-      <Table
-        columns={columns}
-        dataSource={groupedList}
-        rowKey="model"
-        pagination={{ pageSize: 10 }}
-        scroll={{ x: 'max-content' }}
-      />
+      <div className={isAnyModalOpen ? "instock-blur" : ""}>
+        <Table
+          columns={columns}
+          dataSource={groupedList}
+          rowKey={(rec) => rec.model}
+          pagination={{ pageSize: 10 }}
+          scroll={{ x: 'max-content' }}
+        />
+      </div>
 
-      {/* Modal for nested assets of selected model */}
+      {/* Modal: Assets under this Model */}
       <Modal
         title={`Assets under Model: ${selectedModelAssets?.model || ''}`}
-        visible={isModelAssetsModalVisible}
-        onCancel={() => {
-          setIsModelAssetsModalVisible(false);
-          setSelectedModelAssets(null);
-        }}
-        footer={[
-          <Button
-            key="close"
-            onClick={() => {
-              setIsModelAssetsModalVisible(false);
-              setSelectedModelAssets(null);
-            }}
-          >
-            Close
-          </Button>,
-        ]}
-        width={1000}
+        open={modalAssetsVisible}
+        onCancel={() => { setModalAssetsVisible(false); setSelectedModelAssets(null); }}
+        width={950}
         centered
         destroyOnClose
+        footer={[
+          <Button key="close" onClick={() => { setModalAssetsVisible(false); setSelectedModelAssets(null); }}>Close</Button>
+        ]}
       >
-        {selectedModelAssets ? (
+        {selectedModelAssets && (
           <Table
             dataSource={selectedModelAssets.assets}
             rowKey="_id"
-            columns={modelAssetListColumns}
             pagination={false}
+            columns={modelAssetColumns}
             size="small"
             scroll={{ x: 'max-content' }}
           />
-        ) : (
-          <p>No assets found.</p>
         )}
       </Modal>
 
-      {/* Assign Modal */}
+      {/* Assign Modal with Select dropdowns */}
       <Modal
-        title={`Assign: ${selectedEquipment?.model || ''}`}
+        title={`Assign: ${assetToAssign?.model || ''}`}
         open={isAssignModalVisible}
-        onOk={handleAssignSubmit}
-        onCancel={() => setIsAssignModalVisible(false)}
-        okText="Assign"
+        onCancel={() => { setIsAssignModalVisible(false); assignForm.resetFields(); setAssetToAssign(null); }}
+        width={450}
+        centered
         destroyOnClose
+        onOk={handleAssignSubmit}
+        okText="Assign"
+        footer={[
+          <Button key="close" onClick={() => { setIsAssignModalVisible(false); assignForm.resetFields(); setAssetToAssign(null); }}>Cancel</Button>,
+          <Button key="assign" type="primary" onClick={handleAssignSubmit}>Assign</Button>
+        ]}
       >
-        <Form layout="vertical" form={form}>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="assigneeName" label="Assignee Name" rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="position" label="Position" rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="employeeEmail"
-                label="Employee Email"
-                rules={[{ required: true, type: 'email' }]}
-              >
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="phoneNumber" label="Phone Number" rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={24}>
-              <Form.Item name="department" label="Department" rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-          </Row>
+        <Form form={assignForm} layout="vertical">
+          <Form.Item name="assigneeName" label="Assignee Name" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="position" label="Position" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          {/* Removed email validation */}
+          <Form.Item name="employeeEmail" label="Employee Email" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="phoneNumber" label="Phone Number" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="department" label="Department" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
         </Form>
       </Modal>
 
-      {/* Details Modal */}
+      {/* Asset Edit Modal with 2 Columns and Select dropdowns */}
       <Modal
-        title={`Equipment Details: ${detailsEquipment?.model || ''}`}
-        open={isDetailsModalVisible}
-        onCancel={() => setIsDetailsModalVisible(false)}
-        footer={null}
-        width={800}       // <-- add this line
-        centered   
+        title={`Edit: ${assetToEdit?.model || ''}`}
+        open={isEditModalVisible}
+        onCancel={() => { setIsEditModalVisible(false); setAssetToEdit(null); }}
+        width={800}
+        centered
+        destroyOnClose
+        footer={[
+          <Button key="cancel" onClick={() => { setIsEditModalVisible(false); setAssetToEdit(null); }}>Cancel</Button>,
+          <Button key="save" type="primary" onClick={handleEditSubmit}>Save</Button>
+        ]}
       >
-        {assetForInfoDetails && (
-                      <Form form={infoForm} layout="vertical">
-                          <Title level={5} style={{ marginTop: 0, marginBottom: 16 }}>Hardware & General Information</Title>
-                          <Row gutter={16}>
-                              {/* All fields here will be readOnly, arranged in 4 columns (span=6) */}
-                              <Col span={6}><Form.Item label="Asset ID"><Input value={assetForInfoDetails.assetId || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Category"><Input value={assetForInfoDetails.category || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Model"><Input value={assetForInfoDetails.model || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Serial Number"><Input value={assetForInfoDetails.serialNumber || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Location"><Input value={assetForInfoDetails.location || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Purchase Price"><Input value={assetForInfoDetails.purchasePrice || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Status"><Input value={assetForInfoDetails.status || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Purchase Date">
-                                  <Input value={assetForInfoDetails.purchaseDate ? moment(assetForInfoDetails.purchaseDate).format('YYYY-MM-DD') : 'N/A'} readOnly />
-                              </Form.Item></Col>
-                              <Col span={6}><Form.Item label="Warranty Expiry">
-                                  <Input value={assetForInfoDetails.warrantyInfo ? moment(assetForInfoDetails.warrantyInfo).format('DD MMM YYYY') : 'N/A'} readOnly />
-                              </Form.Item></Col>
-                          </Row>
-        
-                          <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>Assignee & Contact Information</Title>
-                          <Row gutter={16}>
-                              <Col span={6}><Form.Item label="Assignee Name"><Input value={assetForInfoDetails.assigneeName || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Position"><Input value={assetForInfoDetails.position || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Employee Email"><Input value={assetForInfoDetails.employeeEmail || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Phone Number"><Input value={assetForInfoDetails.phoneNumber || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Department"><Input value={assetForInfoDetails.department || 'N/A'} readOnly /></Form.Item></Col>
-                          </Row>
-        
-                          <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>Comments & Audit Trail</Title>
-                          <Row gutter={16}>
-                              {assetForInfoDetails.damageDescription && (
-                                  <Col span={12}> {/* Damage Description takes 2 columns for better readability in 4-col context */}
-                                      <Form.Item label="Damage Description">
-                                          <Input.TextArea value={assetForInfoDetails.damageDescription || 'N/A'} rows={2} readOnly />
-                                      </Form.Item>
-                                  </Col>
-                              )}
-                              <Col span={12}> {/* Comment takes 2 columns for better readability */}
-                                  <Form.Item label="Comment">
-                                      <Input.TextArea value={assetForInfoDetails.comment || 'N/A'} rows={2} readOnly />
-                                  </Form.Item>
-                              </Col>
-                              <Col span={12}><Form.Item label="Created At"><Input value={assetForInfoDetails.createdAt ? moment(assetForInfoDetails.createdAt).format('DD MMM YYYY HH:mm') : 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={12}><Form.Item label="Updated At"><Input value={assetForInfoDetails.updatedAt ? moment(assetForInfoDetails.updatedAt).format('DD MMM YYYY HH:mm') : 'N/A'} readOnly /></Form.Item></Col>
-                          </Row>
-                      </Form>
-                  )}
+        {assetToEdit && (
+          <Form form={editForm} layout="vertical">
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item label="Model" name="model" rules={[{ required: true }]}>
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item label="Category" name="category" rules={[{ required: true }]}>
+                  <Select placeholder="Select Category">
+                    <Option value="Laptop">Laptop</Option>
+                    <Option value="Headset">Headset</Option>
+                    <Option value="Keyboard">Keyboard</Option>
+                    <Option value="Mouse">Mouse</Option>
+                    <Option value="Monitor">Monitor</Option>
+                    <Option value="Other">Other</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item label="Serial Number" name="serialNumber" rules={[{ required: true }]}>
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item label="Location" name="location" rules={[{ required: true }]}>
+                  <Select placeholder="Select Location">
+                    <Option value="Bangalore">Bangalore</Option>
+                    <Option value="Mangalore">Mangalore</Option>
+                    <Option value="Hyderabad">Hyderabad</Option>
+                    <Option value="USA">USA</Option>
+                    <Option value="Canada">Canada</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item label="Purchase Price" name="purchasePrice">
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item label="Purchase Date" name="purchaseDate">
+                  <DatePicker style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item label="Warranty" name="warrantyInfo">
+                  <DatePicker style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item label="Status" name="status" rules={[{ required: true }]}>
+                  <Select placeholder="Select Status">
+                    <Option value="In Use">In Use</Option>
+                    <Option value="In Stock">In Stock</Option>
+                    <Option value="Damaged">Damaged</Option>
+                    <Option value="Removed">Removed</Option>
+                    <Option value="E-Waste">E-Waste</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col span={24}>
+                <Form.Item label="Comment" name="comment">
+                  <Input.TextArea rows={3} />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
+        )}
       </Modal>
 
-      {/* External Popconfirm for status change */}
-      {confirmationConfig && (
-        <Popconfirm
-          title={confirmationConfig.title}
-          open={confirmationConfig.visible}
-          onConfirm={confirmationConfig.onConfirm}
-          onCancel={confirmationConfig.onCancel}
-          okText="Yes"
-          cancelText="No"
-          placement="top"
-        >
-          {/* Dummy element required for Popconfirm */}
-          <span style={{ display: 'none' }} />
-        </Popconfirm>
-      )}
+      {/* Full Info Modal */}
+      <Modal
+        title={`Full Asset Details (${assetForInfo?.model || ''})`}
+        open={isInfoModalVisible}
+        onCancel={() => { setIsInfoModalVisible(false); setAssetForInfo(null); }}
+        width={700}
+        centered
+        destroyOnClose
+        footer={[
+          <Button key="close" onClick={() => { setIsInfoModalVisible(false); setAssetForInfo(null); }}>Close</Button>
+        ]}
+      >
+        {assetForInfo && <InfoTable asset={assetForInfo} />}
+      </Modal>
     </>
   );
 };
