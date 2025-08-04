@@ -20,6 +20,12 @@ const LoginPage = ({ onLogin }) => {
     const navigate = useNavigate();
 
     useEffect(() => {
+        // Set body styles to prevent scrolling
+        document.body.style.margin = '0';
+        document.body.style.padding = '0';
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
@@ -28,8 +34,11 @@ const LoginPage = ({ onLogin }) => {
 
         const setCanvasSize = () => {
             if (canvas.parentElement) {
-                canvas.width = canvas.parentElement.offsetWidth;
-                canvas.height = canvas.parentElement.offsetHeight;
+                const rect = canvas.parentElement.getBoundingClientRect();
+                canvas.width = rect.width;
+                canvas.height = rect.height;
+                canvas.style.width = `${rect.width}px`;
+                canvas.style.height = `${rect.height}px`;
             }
         };
 
@@ -79,13 +88,13 @@ const LoginPage = ({ onLogin }) => {
 
         function init() {
             particlesArray = [];
-            const numberOfParticles = (canvas.width * canvas.height) / 7000;
+            const numberOfParticles = Math.max((canvas.width * canvas.height) / 7000, 30);
             const baseColors = ['rgba(255, 255, 255, 0.5)', 'rgba(74, 144, 226, 0.6)', 'rgba(208, 2, 27, 0.6)'];
 
             for (let i = 0; i < numberOfParticles; i++) {
                 const size = (Math.random() * 1.5) + 0.8;
-                const x = (Math.random() * canvas.width);
-                const y = (Math.random() * canvas.height);
+                const x = Math.random() * (canvas.width - size * 2) + size;
+                const y = Math.random() * (canvas.height - size * 2) + size;
                 const directionX = (Math.random() * 0.6) - 0.3;
                 const directionY = (Math.random() * 0.6) - 0.3;
                 const color = baseColors[Math.floor(Math.random() * baseColors.length)];
@@ -97,7 +106,7 @@ const LoginPage = ({ onLogin }) => {
         function connect() {
             const maxDistance = 120;
             for (let a = 0; a < particlesArray.length; a++) {
-                for (let b = a; b < particlesArray.length; b++) {
+                for (let b = a + 1; b < particlesArray.length; b++) {
                     const dx = particlesArray[a].x - particlesArray[b].x;
                     const dy = particlesArray[a].y - particlesArray[b].y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
@@ -128,8 +137,9 @@ const LoginPage = ({ onLogin }) => {
         };
 
         const handleMouseMove = (event) => {
-            mouse.current.x = event.x;
-            mouse.current.y = event.y;
+            const rect = canvas.getBoundingClientRect();
+            mouse.current.x = event.clientX - rect.left;
+            mouse.current.y = event.clientY - rect.top;
         };
 
         const handleMouseOut = () => {
@@ -150,11 +160,13 @@ const LoginPage = ({ onLogin }) => {
             canvas.removeEventListener('mousemove', handleMouseMove);
             canvas.removeEventListener('mouseout', handleMouseOut);
             cancelAnimationFrame(animationFrameId);
+            // Reset body styles
+            document.body.style.overflow = '';
+            document.documentElement.style.overflow = '';
         };
     }, []);
 
-
-     const handleForgotPassword = async () => {
+    const handleForgotPassword = async () => {
         if (!email) {
             message.warning("Please enter your email address.");
             return;
@@ -210,21 +222,55 @@ const LoginPage = ({ onLogin }) => {
     };
 
     // --- STYLES ---
-    // Common input style for both email and password for consistent sizing and appearance
     const commonInputStyle = {
-        padding: '10px 15px', // Increased horizontal padding
+        padding: '10px 15px',
         width: '100%',
-        height: '40px', // Fixed height for consistency
+        height: '40px',
         borderRadius: '4px',
-        border: '1px solid #D5D5D5', // Consistent border
-        boxSizing: 'border-box', // Crucial for consistent width with padding
+        border: '1px solid #D5D5D5',
+        boxSizing: 'border-box',
         fontSize: '14px',
         color: '#000929',
+        backgroundColor: '#FFFFFF',
+        outline: 'none',
     };
 
-    const pageStyle = { display: 'flex', width: '100%', height: '100vh', fontFamily: "'Quicksand', sans-serif" };
-    const leftPanelStyle = { position: 'relative', flex: 1, background: '#0d1a3a', overflow: 'hidden' };
-    const canvasStyle = { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 };
+    const pageStyle = {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: 'flex',
+        width: '100vw',
+        height: '100vh',
+        fontFamily: "'Quicksand', sans-serif",
+        margin: 0,
+        padding: 0,
+        overflow: 'hidden',
+        boxSizing: 'border-box'
+    };
+
+    const leftPanelStyle = {
+        position: 'relative',
+        flex: 1,
+        background: '#0d1a3a',
+        overflow: 'hidden',
+        minWidth: 0,
+        minHeight: 0,
+        height: '100vh'
+    };
+
+    const canvasStyle = {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        zIndex: 1,
+        display: 'block'
+    };
+
     const overlayContentStyle = {
         position: 'absolute',
         top: '50%',
@@ -240,6 +286,7 @@ const LoginPage = ({ onLogin }) => {
         width: '80%',
         maxWidth: '400px',
     };
+
     const logoStyle = {
         width: '100%',
         maxWidth: '300px',
@@ -248,59 +295,108 @@ const LoginPage = ({ onLogin }) => {
         marginBottom: '10px',
     };
 
-    const rightPanelStyle = { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#F1F1F1', position: 'relative' };
-    const formContainerStyle = { backgroundColor: '#FFFFFF', padding: '2.5rem', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)', width: '100%', maxWidth: '400px', textAlign: 'center' };
-    const headingStyle = { color: '#2C4B84', fontSize: '18px', fontWeight: '700', marginBottom: '2rem' };
-    // Adjusted labelStyle for more space between label and input
-    const labelStyle = { display: 'block', textAlign: 'left', color: '#6C727F', fontSize: '12px', fontWeight: '500', marginBottom: '0.4rem' }; // Reduced margin-bottom slightly (4px)
+    const rightPanelStyle = {
+        flex: 1,
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#F1F1F1',
+        position: 'relative',
+        minWidth: 0,
+        minHeight: 0,
+        height: '100vh',
+        overflow: 'hidden'
+    };
 
-    // Style for the main Login button, with hover effect
-    const signInButtonStyle = { // Renamed to signInButtonStyle but used for 'Login' text
+    // White container with background, padding, border radius and shadow
+    const formContainerStyle = {
+        backgroundColor: '#FFFFFF',
+        padding: '2.5rem',
+        borderRadius: '16px',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
+        width: '100%',
+        maxWidth: '400px',
+        textAlign: 'center',
+        boxSizing: 'border-box'
+    };
+
+    const headingStyle = {
+        color: '#2C4B84',
+        fontSize: '18px',
+        fontWeight: '700',
+        marginBottom: '2rem',
+        marginTop: 0
+    };
+
+    const labelStyle = {
+        display: 'block',
+        textAlign: 'left',
+        color: '#6C727F',
+        fontSize: '12px',
+        fontWeight: '500',
+        marginBottom: '0.4rem'
+    };
+
+    const signInButtonStyle = {
         width: '100%',
         padding: '12px',
         border: 'none',
         borderRadius: '8px',
-        backgroundColor: signInButtonHovered ? '#1d54b8' : '#296bd5ff', // Darker blue on hover
+        backgroundColor: signInButtonHovered ? '#1d54b8' : '#296bd5ff',
         color: 'white',
         fontSize: '14px',
         fontWeight: '700',
         cursor: 'pointer',
-        marginTop: '0.5rem', // Space from password input
-        transition: 'background-color 0.3s ease', // Smooth transition for hover
+        marginTop: '0.5rem',
+        transition: 'background-color 0.3s ease',
+        outline: 'none'
     };
 
-    // Style for the Forgot Password button, with hover effect
     const forgotPasswordButtonStyle = {
         background: 'none',
-        color: forgotButtonHovered ? '#1d54b8' : '#296bd5ff', // Darker blue on hover
+        color: forgotButtonHovered ? '#1d54b8' : '#296bd5ff',
         border: 'none',
         cursor: 'pointer',
-        marginTop: '1rem', // Space from login button
+        marginTop: '1rem',
         fontSize: '13px',
         textAlign: 'center',
         display: 'block',
         width: '100%',
-        transition: 'color 0.3s ease', // Smooth transition for hover
+        transition: 'color 0.3s ease',
+        outline: 'none'
     };
 
-    const errorStyle = { color: '#D5292B', fontSize: '12px', marginTop: '0.8rem', height: '14px', textAlign: 'center' };
-    const subtitleStyle = { color: '#FFFFFF', opacity: 0.8, fontSize: '14px', fontWeight: '500', marginTop: '4px' };
-    // Password eye icon style with precise top adjustment
+    const errorStyle = {
+        color: '#D5292B',
+        fontSize: '12px',
+        marginTop: '0.8rem',
+        height: '14px',
+        textAlign: 'center'
+    };
+
+    const subtitleStyle = {
+        color: '#FFFFFF',
+        opacity: 0.8,
+        fontSize: '14px',
+        fontWeight: '500',
+        marginTop: '4px'
+    };
+
     const passwordToggleIconStyle = {
         position: 'absolute',
-        right: '15px', // Distance from the right edge
-        top: '67%',    // Precisely adjusted top (relative to input container)
+        right: '15px',
+        top: '67%',
         transform: 'translateY(-50%)',
         cursor: 'pointer',
         color: '#6C727F',
         fontSize: '16px',
         zIndex: 2,
     };
-    const inputContainerStyle = {
-        marginBottom: '1.2rem', // Consistent margin bottom for form rows
-        position: 'relative', // Necessary for absolute positioning of the icon
-    };
 
+    const inputContainerStyle = {
+        marginBottom: '1.2rem',
+        position: 'relative',
+    };
 
     return (
         <div style={pageStyle}>
@@ -321,7 +417,6 @@ const LoginPage = ({ onLogin }) => {
                 <div style={formContainerStyle}>
                     <h2 style={headingStyle}>IT Department Login</h2>
                     <form onSubmit={handleLogin}>
-                        {/* Email Input Field */}
                         <div style={inputContainerStyle}>
                             <label htmlFor="email" style={labelStyle}>Email Address</label>
                             <input
@@ -334,19 +429,17 @@ const LoginPage = ({ onLogin }) => {
                                 style={commonInputStyle}
                             />
                         </div>
-                        {/* Password Input Field with Eye Icon */}
                         <div style={inputContainerStyle}>
                             <label htmlFor="password" style={labelStyle}>Password</label>
                             <input
                                 type={showPassword ? 'text' : 'password'}
                                 id="password"
-                                style={{ ...commonInputStyle, paddingRight: '40px' }} // Increased right padding for icon space
+                                style={{ ...commonInputStyle, paddingRight: '40px' }}
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
                                 placeholder="Enter your password"
                                 required
                             />
-                            {/* Eye icon for password visibility toggle */}
                             <span
                                 onClick={() => setShowPassword(!showPassword)}
                                 style={passwordToggleIconStyle}
@@ -354,9 +447,7 @@ const LoginPage = ({ onLogin }) => {
                                 {showPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
                             </span>
                         </div>
-                        {/* Error Message */}
                         <p style={errorStyle}>{error}</p>
-                        {/* Login Button */}
                         <button
                             type="submit"
                             style={signInButtonStyle}
@@ -364,10 +455,9 @@ const LoginPage = ({ onLogin }) => {
                             onMouseOver={() => setSignInButtonHovered(true)}
                             onMouseLeave={() => setSignInButtonHovered(false)}
                         >
-                            {isLoading ? 'Logging In...' : 'Login'} {/* Changed text from Sign In to Login */}
+                            {isLoading ? 'Logging In...' : 'Login'}
                         </button>
 
-                        {/* Forgot Password Button */}
                         <button
                             type="button"
                             onClick={() => navigate('/reset-password')}
@@ -378,9 +468,10 @@ const LoginPage = ({ onLogin }) => {
                             Forgot Password?
                         </button>
 
-                        {/* Forgot Password Email Sent Message */}
                         {forgotEmailSent && (
-                            <div style={{ color: '#296bd5ff', margin: '6px 0', fontSize: '13px', textAlign: 'center' }}>Reset email sent. Check your inbox.</div>
+                            <div style={{ color: '#296bd5ff', margin: '6px 0', fontSize: '13px', textAlign: 'center' }}>
+                                Reset email sent. Check your inbox.
+                            </div>
                         )}
                     </form>
                 </div>
