@@ -63,7 +63,7 @@ const WelcomePage = () => {
         backgroundColor: '#ffffff',
         paddingTop: isMobile ? '6px' : '8px',
         paddingBottom: isMobile ? '6px' : '8px',
-        paddingLeft: isLargeDesktop ? '10px' : '15px',
+        paddingLeft: isLargeDesktop ? '8px' : '15px',
         paddingRight: isLargeDesktop ? '10px' : '15px',
         flexShrink: 0,
     };
