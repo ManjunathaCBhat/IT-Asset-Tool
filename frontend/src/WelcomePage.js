@@ -35,7 +35,7 @@ const WelcomePage = () => {
 
     // --- Image Paths (ensure these are correct relative to your public folder) ---
     const logoSrc = `${process.env.PUBLIC_URL}/C_Lab Logo.png`;
-    const heroBgSrc = `${process.env.PUBLIC_URL}/eae123d71b02e34da63aec2a6f8ecd450165c106.png`;
+
 
     // --- Inline Style Objects ---
 
@@ -169,21 +169,6 @@ const WelcomePage = () => {
         minHeight: 0, // Allow flex shrinking
     };
 
-    const heroBackgroundStyle = {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        zIndex: -1,
-    };
-
-    const heroBackgroundImgStyle = {
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
-        objectPosition: 'center',
-    };
 
     const heroContentStyle = {
         maxWidth: isMobile ? '90%' : '800px',
