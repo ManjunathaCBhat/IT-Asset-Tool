@@ -23,22 +23,6 @@ const getStatusColor = (status) => {
     return colors[status] || 'rgba(0, 0, 0, 0.85)'; // Default text color if no specific color is found
 };
 
-const renderWarrantyTag = (date) => {
-    if (!date) return 'N/A';
-    const warrantyDate = moment(date);
-    if (!warrantyDate.isValid()) return 'Invalid Date';
-
-    const today = moment();
-    const thirtyDaysFromNow = moment().add(30, 'days');
-
-    if (warrantyDate.isBefore(today, 'day')) {
-        return <Tag color="error">Expired: {warrantyDate.format('DD MMM YYYY')}</Tag>;
-    }
-    if (warrantyDate.isBefore(thirtyDaysFromNow, 'day')) {
-        return <Tag color="warning">Soon: {warrantyDate.format('DD MMM YYYY')}</Tag>;
-    }
-    return warrantyDate.format('DD MMM YYYY');
-};
 
 // --- Helper function for grouping and counting by category ---
 const summarizeByCategory = (assets) => {
@@ -162,7 +146,7 @@ const Dashboard = () => {
     }, [fetchDashboardData]);
 
     return (
-        <div style={{ padding: '24px', background: '#f0f2f5', minHeight: '100%' }}>
+        <div>
             {error && <Alert message="Error" description={error} type="error" showIcon style={{ marginBottom: '20px' }} />}
 
             <Title level={3} style={{ marginBottom: '24px' }}>Dashboard Overview</Title>

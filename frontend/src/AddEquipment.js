@@ -62,7 +62,7 @@ const AddEquipment = () => {
             message.success('Equipment added successfully!');
             form.resetFields();
             setCategory('');
-            navigate('/all-assets');
+            navigate('/InStockView'); // Redirect to In Stock View after successful addition
         } catch (error) {
             console.error("Error adding equipment:", error.response ? error.response.data : error.message);
             message.error(error.response?.data?.message || 'Failed to add equipment.');
@@ -76,9 +76,9 @@ const AddEquipment = () => {
     };
 
     return (
-        <div style={{ background: '#f0f2f5', padding: '12px', minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
-            <Card style={{ width: '100%', maxWidth: 1200, margin: '24px auto 0 auto' }} variant="outlined">
-                <Title level={3} style={{ textAlign: 'center', marginBottom: '16px' }}>Add New Equipment</Title>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+            <Card style={{ width: '100%', maxWidth: 1200, margin: '0' ,border: 'none',boxShadow: 'none',background: 'transparent',}} variant="outlined">
+                <Title level={3} style={{ textAlign: 'center', marginTop: '0px',marginBottom: '30px' }}>Add New Equipment</Title>
                 <Form
                     form={form}
                     layout="vertical"

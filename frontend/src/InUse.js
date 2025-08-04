@@ -406,7 +406,7 @@ const InUse = () => {
 
       {/* Edit/View Modal (for individual assets, now 2-column) */}
       <Modal
-        title={isViewOnlyModal ? 'Asset Details' : 'Edit Asset'}
+        title={isViewOnlyModal ? 'Asset Details' : 'Edit Asset - Hardware & General Information'}
         open={isEditViewModalVisible}
         onCancel={handleCancelEditView}
         afterClose={() => setSelectedAsset(null)}
@@ -429,7 +429,7 @@ const InUse = () => {
       >
         <Form form={editViewForm} layout="vertical">
           <Row gutter={16}> {/* Use Row/Col for 2 columns */}
-            <Title level={5} style={{ marginTop: 0, marginBottom: 16 }}>Hardware & General Information</Title>
+            
             <Col span={12}><Form.Item label="Model" name="model" rules={[{ required: true }]}><Input disabled={isViewOnlyModal} /></Form.Item></Col>
             <Col span={12}><Form.Item label="Category" name="category" rules={[{ required: true }]}><Input disabled={isViewOnlyModal} /></Form.Item></Col>
             <Col span={12}><Form.Item label="Serial Number" name="serialNumber" rules={[{ required: true }]}><Input disabled={isViewOnlyModal} /></Form.Item></Col>
