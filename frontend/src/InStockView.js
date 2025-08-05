@@ -13,13 +13,40 @@ import moment from 'moment';
 const { Title } = Typography;
 const { Option } = Select;
 
-// Auth header helper
+// Blur effect for modal open
+const inlineStyles = (
+  <style>
+    {`
+    .instock-blur {
+      filter: blur(3px);
+      pointer-events: none;
+      user-select: none;
+      transition: filter 0.15s;
+    }
+    `}
+  </style>
+);
+
+// Compact info table style
+const infoTableCompactStyles = (
+  <style>
+    {`
+    .asset-info-table .ant-table-cell,
+    .asset-info-table .ant-table-thead > tr > th,
+    .asset-info-table .ant-table-tbody > tr > td {
+      font-size: 13px !important;
+      padding: 4px 8px !important;
+      line-height: 1.3 !important;
+    }
+    `}
+  </style>
+);
+
 const getAuthHeader = () => {
   const token = localStorage.getItem('token');
   return token ? { 'x-auth-token': token } : {};
 };
 
-// Warranty tag logic
 const renderWarrantyTag = (date) => {
   if (!date) return 'N/A';
   const warrantyDate = moment(date);
@@ -35,7 +62,6 @@ const renderWarrantyTag = (date) => {
   return warrantyDate.format('DD MMM YYYY');
 };
 
-// Status color helper
 const getStatusColor = (status) => ({
   'In Use': '#7ED321',
   'In Stock': '#FA8C16',
@@ -44,7 +70,6 @@ const getStatusColor = (status) => ({
   Removed: '#555555'
 }[status] || 'default');
 
-// Group assets by model
 const groupAssetsByModel = (assets) => {
   const grouped = assets.reduce((acc, asset) => {
     const key = asset.model || 'Unknown Model';
@@ -61,14 +86,41 @@ const groupAssetsByModel = (assets) => {
   return Object.values(grouped);
 };
 
+const assetToRows = asset => [
+  ['Asset ID', asset.assetId || 'N/A'],
+  ['Category', asset.category || 'N/A'],
+  ['Model', asset.model || 'N/A'],
+  ['Serial Number', asset.serialNumber || 'N/A'],
+  ['Location', asset.location || 'N/A'],
+  ['Status', asset.status || 'N/A'],
+  ['Purchase Price', asset.purchasePrice || 'N/A'],
+  ['Warranty Expiry', asset.warrantyInfo ? moment(asset.warrantyInfo).format('DD MMM YYYY') : 'N/A'],
+  ['Comment', asset.comment || 'N/A'],
+  ['Damage Description', asset.damageDescription || 'N/A'],
+  ['Created At', asset.createdAt ? moment(asset.createdAt).format('DD MMM YYYY HH:mm') : 'N/A'],
+  ['Updated At', asset.updatedAt ? moment(asset.updatedAt).format('DD MMM YYYY HH:mm') : 'N/A'],
+];
+
+const InfoTable = ({ asset }) => (
+  <Table
+    style={{ margin: 0, marginBottom: 20 }}
+    bordered
+    dataSource={assetToRows(asset).map(([label, value], idx) => ({ key: idx, label, value }))}
+    pagination={false}
+    showHeader={false}
+    columns={[
+      { dataIndex: 'label', key: 'label', width: 200, render: text => <strong>{text}</strong> },
+      { dataIndex: 'value', key: 'value' },
+    ]}
+    size="middle"
+  />
+);
+
 const InStockView = () => {
-  // Data and state
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Modals and form states
-  const [isAnyModalOpen, setIsAnyModalOpen] = useState(false);
   const [modalAssetsVisible, setModalAssetsVisible] = useState(false);
   const [selectedModelAssets, setSelectedModelAssets] = useState(null);
 
@@ -83,7 +135,14 @@ const InStockView = () => {
   const [assetToEdit, setAssetToEdit] = useState(null);
   const [editForm] = Form.useForm();
 
-  // Fetch all In Stock assets
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    pageSizeOptions: ['10', '20', '50'],
+    showSizeChanger: true,
+  });
+
   const fetchAssets = useCallback(async () => {
     try {
       const response = await axios.get('http://localhost:5000/api/equipment', { headers: getAuthHeader() });
@@ -97,11 +156,6 @@ const InStockView = () => {
 
   useEffect(() => { fetchAssets(); }, [fetchAssets]);
 
-  useEffect(() => {
-    setIsAnyModalOpen(isAssignModalVisible || modalAssetsVisible || isInfoModalVisible || isEditModalVisible);
-  }, [isAssignModalVisible, modalAssetsVisible, isInfoModalVisible, isEditModalVisible]);
-
-  // Filtering logic
   const handleSearch = (e) => {
     const { value } = e.target;
     setSearchTerm(value);
@@ -115,11 +169,19 @@ const InStockView = () => {
         String(field || '').toLowerCase().includes(lower)
       )
     ));
+    setPagination(prev => ({ ...prev, current: 1 }));
   };
 
   const groupedList = groupAssetsByModel(filteredData);
 
-  // Assign modal open/submit
+  const handleTableChange = (pag, filters, sorter) => {
+    setPagination(prev => ({
+      ...prev,
+      current: pag.current,
+      pageSize: pag.pageSize,
+    }));
+  };
+
   const handleAssign = (asset) => {
     setAssetToAssign(asset);
     assignForm.resetFields();
@@ -137,13 +199,12 @@ const InStockView = () => {
       setIsAssignModalVisible(false);
       setAssetToAssign(null);
       message.success('Asset assigned.');
-      setTimeout(fetchAssets, 250); // Wait for DB
+      fetchAssets(); // immediate!
     } catch {
       message.error('Failed to assign.');
     }
   };
 
-  // Edit modal open/save (2 columns)
   const handleEdit = (asset) => {
     setAssetToEdit(asset);
     editForm.setFieldsValue({
@@ -168,13 +229,12 @@ const InStockView = () => {
       setIsEditModalVisible(false);
       setAssetToEdit(null);
       message.success('Asset updated.');
-      setTimeout(fetchAssets, 200);
+      fetchAssets(); // immediate!
     } catch {
       message.error('Update failed!');
     }
   };
 
-  // Actions: Move asset to status
   const handleMoveStatus = async (asset, newStatus) => {
     try {
       await axios.put(
@@ -187,19 +247,17 @@ const InStockView = () => {
       setIsInfoModalVisible(false);
       setModalAssetsVisible(false);
       message.success(`Moved to ${newStatus}`);
-      setTimeout(fetchAssets, 250);
+      fetchAssets(); // immediate!
     } catch {
       message.error('Status update failed.');
     }
   };
 
-  // Info view WITHOUT assignee details per your request
   const handleInfo = (asset) => {
     setAssetForInfo(asset);
     setIsInfoModalVisible(true);
   };
 
-  // Actions for asset in nested modal
   const renderAssetActions = (asset) => (
     <Space>
       <Button icon={<UserAddOutlined />} onClick={() => handleAssign(asset)} title="Assign to user" />
@@ -244,15 +302,38 @@ const InStockView = () => {
     </Space>
   );
 
-  // Main grouped table columns
+  const getSerialNumber = (i) => {
+    return (pagination.current - 1) * pagination.pageSize + i + 1;
+  };
+
   const columns = [
-    { title: 'Sl No', key: 'slno', render: (_, __, i) => i + 1, width: 70 },
-    { title: 'Model', dataIndex: 'model', key: 'model' },
-    { title: 'Category', dataIndex: 'category', key: 'category' },
+    {
+      title: 'Sl No',
+      key: 'slno',
+      render: (_, __, i) => getSerialNumber(i),
+      width: 70
+    },
+    {
+      title: 'Model',
+      dataIndex: 'model',
+      key: 'model',
+      sorter: (a, b) =>
+        (a.model || '').toLowerCase() > (b.model || '').toLowerCase() ? 1 :
+        (a.model || '').toLowerCase() < (b.model || '').toLowerCase() ? -1 : 0,
+    },
+    {
+      title: 'Category',
+      dataIndex: 'category',
+      key: 'category',
+      sorter: (a, b) =>
+        (a.category || '').toLowerCase() > (b.category || '').toLowerCase() ? 1 :
+        (a.category || '').toLowerCase() < (b.category || '').toLowerCase() ? -1 : 0,
+    },
     {
       title: 'Asset Count',
       key: 'assetCount',
       render: (_, record) => record.assets.length,
+      sorter: (a, b) => a.assets.length - b.assets.length,
     },
     {
       title: 'Actions',
@@ -268,7 +349,6 @@ const InStockView = () => {
     }
   ];
 
-  // Nested individual asset columns WITHOUT purchase date column
   const modelAssetColumns = [
     {
       title: 'Sl No',
@@ -276,7 +356,7 @@ const InStockView = () => {
       render: (_, __, i) => i + 1,
       width: 60,
     },
-    { title: 'Serial #', dataIndex: 'serialNumber', key: 'serialNumber' },
+    { title: 'Serial Number', dataIndex: 'serialNumber', key: 'serialNumber' },
     { title: 'Warranty', dataIndex: 'warrantyInfo', key: 'warrantyInfo', render: renderWarrantyTag },
     { title: 'Location', dataIndex: 'location', key: 'location' },
     {
@@ -287,62 +367,37 @@ const InStockView = () => {
     }
   ];
 
-  // Asset info table WITHOUT assignee details
-  const assetToRows = asset => [
-    ['Asset ID', asset.assetId || 'N/A'],
-    ['Category', asset.category || 'N/A'],
-    ['Model', asset.model || 'N/A'],
-    ['Serial Number', asset.serialNumber || 'N/A'],
-    ['Location', asset.location || 'N/A'],
-    ['Status', asset.status || 'N/A'],
-    ['Purchase Price', asset.purchasePrice || 'N/A'],
-    ['Warranty Expiry', asset.warrantyInfo ? moment(asset.warrantyInfo).format('DD MMM YYYY') : 'N/A'],
-    ['Comment', asset.comment || 'N/A'],
-    ['Damage Description', asset.damageDescription || 'N/A'],
-    ['Created At', asset.createdAt ? moment(asset.createdAt).format('DD MMM YYYY HH:mm') : 'N/A'],
-    ['Updated At', asset.updatedAt ? moment(asset.updatedAt).format('DD MMM YYYY HH:mm') : 'N/A'],
-  ];
-
-  const InfoTable = ({ asset }) => (
-    <Table
-      style={{ margin: 0 }}
-      bordered
-      dataSource={assetToRows(asset).map(([label, value], idx) => ({ key: idx, label, value }))}
-      pagination={false}
-      showHeader={false}
-      columns={[
-        { dataIndex: 'label', key: 'label', width: 200, render: text => <strong>{text}</strong> },
-        { dataIndex: 'value', key: 'value' },
-      ]}
-      size="middle"
-    />
-  );
-
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>In Stock Equipment</Title>
-        <Input
-          placeholder="Search all fields..."
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={handleSearch}
-          style={{ width: 250 }}
-          allowClear
-        />
-      </div>
-
-      <div className={isAnyModalOpen ? "instock-blur" : ""}>
+      {inlineStyles}
+      {infoTableCompactStyles}
+      <div className={modalAssetsVisible ? "instock-blur" : ""}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <Title level={4} style={{ margin: 0 }}>In Stock Equipment</Title>
+          <Input
+            placeholder="Search all fields..."
+            prefix={<SearchOutlined />}
+            value={searchTerm}
+            onChange={handleSearch}
+            style={{ width: 250 }}
+            allowClear
+          />
+        </div>
         <Table
           columns={columns}
           dataSource={groupedList}
           rowKey={(rec) => rec.model}
-          pagination={{ pageSize: 10 }}
+          pagination={{
+            ...pagination,
+            total: groupedList.length,
+            showTotal: total => `Total ${total} items`,
+            showSizeChanger: true,
+          }}
+          onChange={handleTableChange}
           scroll={{ x: 'max-content' }}
         />
       </div>
 
-      {/* Modal: Assets under this Model */}
       <Modal
         title={`Assets under Model: ${selectedModelAssets?.model || ''}`}
         open={modalAssetsVisible}
@@ -366,7 +421,6 @@ const InStockView = () => {
         )}
       </Modal>
 
-      {/* Assign Modal with Select dropdowns */}
       <Modal
         title={`Assign: ${assetToAssign?.model || ''}`}
         open={isAssignModalVisible}
@@ -388,7 +442,6 @@ const InStockView = () => {
           <Form.Item name="position" label="Position" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          {/* Removed email validation */}
           <Form.Item name="employeeEmail" label="Employee Email" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
@@ -401,7 +454,6 @@ const InStockView = () => {
         </Form>
       </Modal>
 
-      {/* Asset Edit Modal with 2 Columns and Select dropdowns */}
       <Modal
         title={`Edit: ${assetToEdit?.model || ''}`}
         open={isEditModalVisible}
@@ -486,7 +538,7 @@ const InStockView = () => {
         )}
       </Modal>
 
-      {/* Full Info Modal */}
+      {/* Full Info Modal with compact style */}
       <Modal
         title={`Full Asset Details (${assetForInfo?.model || ''})`}
         open={isInfoModalVisible}
@@ -498,7 +550,11 @@ const InStockView = () => {
           <Button key="close" onClick={() => { setIsInfoModalVisible(false); setAssetForInfo(null); }}>Close</Button>
         ]}
       >
-        {assetForInfo && <InfoTable asset={assetForInfo} />}
+        {assetForInfo && (
+          <div className="asset-info-table">
+            <InfoTable asset={assetForInfo} />
+          </div>
+        )}
       </Modal>
     </>
   );

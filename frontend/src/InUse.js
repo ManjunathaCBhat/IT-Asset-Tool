@@ -1,52 +1,79 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
-import {  Table, Tag,Typography,Modal,Button,Space,Form,Input,message,Dropdown,Popconfirm,Menu,DatePicker,Row,Col} from 'antd';
+import { Table, Tag, Typography, Modal, Button, Space, Form, Input, message, Dropdown, Popconfirm, Menu, DatePicker, Row, Col, Select } from 'antd';
 import {
-  SearchOutlined,
   EyeOutlined,
   MoreOutlined,
   EditOutlined,
   WarningOutlined as DamagedIcon,
   DeleteOutlined as EWasteIcon,
   RollbackOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  SearchOutlined
 } from '@ant-design/icons';
 import moment from 'moment';
 
 const { Title } = Typography;
+const { Option } = Select;
 
-// Helper for status colors
-const getStatusColor = (status) => {
-  const colors = {
-    'In Use': '#7ED321',
-    'In Stock': '#FA8C16',
-    Damaged: '#D0021B',
-    'E-Waste': '#8B572A',
-    Removed: '#555555'
-  };
-  return colors[status] || 'default';
-};
+const colorBorderStyle = (
+  <style>
+    {`
+    .instock-blur {
+      filter: blur(4px);
+      pointer-events: none;
+      user-select: none;
+      transition: filter 0.3s;
+    }
+    .asset-info-table .ant-table-wrapper .ant-table {
+      border: 1px solid #ececec;
+      border-radius: 5px;
+    }
+    .asset-info-table .ant-table-cell,
+    .asset-info-table .ant-table-thead > tr > th,
+    .asset-info-table .ant-table-tbody > tr > td {
+      border: 1px solid #ececec !important;
+      padding: 4px 8px;
+      background: #fff;
+      font-size: 13px;
+      color: #222;
+    }
+    .asset-info-table .ant-table-thead > tr > th {
+      background-color: #fafcff;
+      color: #222;
+      font-weight: 600;
+    }
+    .asset-info-table .ant-table-tbody > tr > td {
+      font-size: 13px !important;
+      padding: 4px 8px !important;
+    }
+    `}
+  </style>
+);
 
-// Render Warranty Tag (used in table columns)
+const getStatusColor = (status) => ({
+  'In Use': '#7ED321',
+  'In Stock': '#FA8C16',
+  Damaged: '#D0021B',
+  'E-Waste': '#8B572A',
+  Removed: '#555555'
+}[status] || 'default');
+
 const renderWarrantyTag = (date) => {
   if (!date) return 'N/A';
   const warrantyDate = moment(date);
   if (!warrantyDate.isValid()) return 'Invalid Date';
-
   const today = moment();
-  const thirtyDaysFromNow = moment().add(30, 'days');
-
+  const thirtyDays = moment().add(30, 'days');
   if (warrantyDate.isBefore(today, 'day')) {
     return <Tag color="error">Expired: {warrantyDate.format('DD MMM YYYY')}</Tag>;
   }
-  if (warrantyDate.isBefore(thirtyDaysFromNow, 'day')) {
+  if (warrantyDate.isBefore(thirtyDays, 'day')) {
     return <Tag color="warning">Soon: {warrantyDate.format('DD MMM YYYY')}</Tag>;
   }
   return warrantyDate.format('DD MMM YYYY');
 };
 
-
-// Group assets by employeeEmail
 const groupAssetsByEmail = (assets) => {
   const grouped = assets.reduce((acc, asset) => {
     const emailKey = asset.employeeEmail || 'unknown';
@@ -70,30 +97,53 @@ const getAuthHeader = () => {
   return token ? { 'x-auth-token': token } : {};
 };
 
+const locationOptions = ['Bangalore', 'Mangalore', 'Hyderabad', 'USA', 'Canada'];
+const categoryOptions = ['Laptop', 'Headset', 'Keyboard', 'Mouse', 'Monitor', 'Other'];
+const statusOptions = ['In Use', 'In Stock', 'Damaged', 'Removed', 'E-Waste'];
+
+const assetTableRows = asset => [
+  ['Model', asset.model || 'N/A'],
+  ['Category', asset.category || 'N/A'],
+  ['Serial Number', asset.serialNumber || 'N/A'],
+  ['Status', asset.status || 'N/A'],
+  ['Location', asset.location || 'N/A'],
+  ['Purchase Price', asset.purchasePrice || 'N/A'],
+  ['Purchase Date', asset.purchaseDate ? moment(asset.purchaseDate).format('YYYY-MM-DD') : 'N/A'],
+  ['Warranty Expiry', asset.warrantyInfo ? moment(asset.warrantyInfo).format('DD MMM YYYY') : 'N/A'],
+];
+
+const assigneeRows = asset => [
+  ['Assignee Name', asset.assigneeName || 'N/A'],
+  ['Employee Email', asset.employeeEmail || 'N/A'],
+  ['Position', asset.position || 'N/A'],
+  ['Phone Number', asset.phoneNumber || 'N/A'],
+  ['Department', asset.department || 'N/A'],
+];
+
 const InUse = () => {
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    pageSizeOptions: ['10', '20', '50'],
+    showSizeChanger: true,
+  });
 
-  // Main Modal for View/Edit Individual Asset (Existing modal, now 2-column)
   const [selectedAsset, setSelectedAsset] = useState(null);
-  const [isEditViewModalVisible, setIsEditViewModalVisible] = useState(false);
-  const [isViewOnlyModal, setIsViewOnlyModal] = useState(false);
-  const [editViewForm] = Form.useForm();
-
-  // NEW: State for Dedicated Full Info Modal (Read-Only, triggered by Info icon in nested table)
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [isInfoModalVisible, setIsInfoModalVisible] = useState(false);
-  const [assetForInfoDetails, setAssetForInfoDetails] = useState(null);
-  const [infoForm] = Form.useForm(); // New form instance for the info modal
+  const [editForm] = Form.useForm();
 
-  // Modal for displaying assets grouped by employeeEmail (Main table's 'Details' button)
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedEmployeeAssets, setSelectedEmployeeAssets] = useState(null);
 
-  // For blur effect
+  const [returnPopupVisible, setReturnPopupVisible] = useState('');
+  const [returningAsset, setReturningAsset] = useState(null);
+
   const [isAnyModalOpen, setIsAnyModalOpen] = useState(false);
 
-  // --- Data Fetching ---
   const fetchInUseAssets = useCallback(async () => {
     try {
       const response = await axios.get('http://localhost:5000/api/equipment', { headers: getAuthHeader() });
@@ -102,7 +152,6 @@ const InUse = () => {
       setFilteredData(inUseAssets);
     } catch (error) {
       message.error('Failed to fetch In Use assets.');
-      console.error('Error fetching In Use assets:', error);
     }
   }, []);
 
@@ -110,10 +159,9 @@ const InUse = () => {
     fetchInUseAssets();
   }, [fetchInUseAssets]);
 
-  // Update isAnyModalOpen when any modal state changes
   useEffect(() => {
-    setIsAnyModalOpen(isEditViewModalVisible || modalVisible || isInfoModalVisible);
-  }, [isEditViewModalVisible, modalVisible, isInfoModalVisible]);
+    setIsAnyModalOpen(isEditModalVisible || modalVisible || isInfoModalVisible || !!returnPopupVisible);
+  }, [isEditModalVisible, modalVisible, isInfoModalVisible, returnPopupVisible]);
 
   const handleSearch = (e) => {
     const value = e.target.value;
@@ -122,70 +170,62 @@ const InUse = () => {
       Object.values(item).some((field) => String(field).toLowerCase().includes(value.toLowerCase()))
     );
     setFilteredData(filtered);
+    setPagination(prev => ({ ...prev, current: 1 }));
   };
 
   const groupedList = groupAssetsByEmail(filteredData);
 
-
-  // handleInfoDetails for individual asset full info (read-only)
-  const handleInfoDetails = (record) => {
-      setAssetForInfoDetails(record);
-      infoForm.setFieldsValue({
-          ...record,
-          purchaseDate: record.purchaseDate ? moment(record.purchaseDate) : null,
-          warrantyInfo: record.warrantyInfo ? moment(record.warrantyInfo) : null,
-      });
-      setIsInfoModalVisible(true);
+  const handleTableChange = (pag) => {
+    setPagination(prev => ({
+      ...prev,
+      current: pag.current,
+      pageSize: pag.pageSize,
+    }));
   };
 
+  const handleInfoDetails = (record) => {
+    setSelectedAsset(record);
+    setIsInfoModalVisible(true);
+  };
   const handleEdit = (record) => {
     setSelectedAsset(record);
-    editViewForm.setFieldsValue({
+    editForm.setFieldsValue({
       ...record,
       warrantyInfo: record.warrantyInfo ? moment(record.warrantyInfo) : null,
       purchaseDate: record.purchaseDate ? moment(record.purchaseDate) : null,
     });
-    setIsViewOnlyModal(false); // Enable editing
-    setIsEditViewModalVisible(true);
+    setIsEditModalVisible(true);
   };
 
   const handleSaveEditView = async () => {
     try {
-      const values = await editViewForm.validateFields();
+      const values = await editForm.validateFields();
       const updatedAsset = { ...values };
-      // Explicitly format date fields before sending to backend
       if (updatedAsset.warrantyInfo) {
-          updatedAsset.warrantyInfo = moment(updatedAsset.warrantyInfo).format('YYYY-MM-DD');
+        updatedAsset.warrantyInfo = moment(updatedAsset.warrantyInfo).format('YYYY-MM-DD');
       }
       if (updatedAsset.purchaseDate) {
-          updatedAsset.purchaseDate = moment(updatedAsset.purchaseDate).format('YYYY-MM-DD');
+        updatedAsset.purchaseDate = moment(updatedAsset.purchaseDate).format('YYYY-MM-DD');
       }
-
       const payloadToSend = {
-          category: updatedAsset.category,
-          model: updatedAsset.model,
-          serialNumber: updatedAsset.serialNumber,
-          warrantyInfo: updatedAsset.warrantyInfo,
-          location: updatedAsset.location,
-          comment: updatedAsset.comment,
-          assigneeName: updatedAsset.assigneeName,
-          position: updatedAsset.position,
-          employeeEmail: updatedAsset.employeeEmail,
-          phoneNumber: updatedAsset.phoneNumber,
-          department: updatedAsset.department,
-          damageDescription: updatedAsset.status === 'Damaged' ? updatedAsset.damageDescription : null,
-          purchaseDate: updatedAsset.purchaseDate,
-          status: updatedAsset.status,
-          purchasePrice: updatedAsset.purchasePrice,
+        category: updatedAsset.category,
+        model: updatedAsset.model,
+        serialNumber: updatedAsset.serialNumber,
+        warrantyInfo: updatedAsset.warrantyInfo,
+        location: updatedAsset.location,
+        comment: updatedAsset.comment,
+        assigneeName: updatedAsset.assigneeName,
+        position: updatedAsset.position,
+        employeeEmail: updatedAsset.employeeEmail,
+        phoneNumber: updatedAsset.phoneNumber,
+        department: updatedAsset.department,
+        damageDescription: updatedAsset.status === 'Damaged' ? updatedAsset.damageDescription : null,
+        purchaseDate: updatedAsset.purchaseDate,
+        status: updatedAsset.status,
+        purchasePrice: updatedAsset.purchasePrice,
       };
-      // Convert empty strings to null for optional fields for backend consistency
-      if (payloadToSend.assigneeName === '') payloadToSend.assigneeName = null;
-      if (payloadToSend.position === '') payloadToSend.position = null;
-      if (payloadToSend.employeeEmail === '') payloadToSend.employeeEmail = null;
-      if (payloadToSend.phoneNumber === '') payloadToSend.phoneNumber = null;
-      if (payloadToSend.department === '') payloadToSend.department = null;
-      if (payloadToSend.comment === '') payloadToSend.comment = null;
-      if (payloadToSend.damageDescription === '') payloadToSend.damageDescription = null;
+      for (const k of ['assigneeName','position','employeeEmail','phoneNumber','department','comment','damageDescription'])
+        if (payloadToSend[k] === "") payloadToSend[k] = null;
 
       await axios.put(
         `http://localhost:5000/api/equipment/${selectedAsset._id}`,
@@ -193,27 +233,30 @@ const InUse = () => {
         { headers: getAuthHeader() }
       );
       message.success('Asset updated successfully.');
-      handleCancelEditView();
+      setIsEditModalVisible(false);
+      setSelectedAsset(null);
+      editForm.resetFields();
       fetchInUseAssets();
     } catch (error) {
       message.error('Failed to update asset.');
-      console.error('Failed to update asset:', error.response ? error.response.data : error.message);
     }
   };
 
-  const handleCancelEditView = () => {
-    setIsEditViewModalVisible(false);
-    setIsViewOnlyModal(false);
-    setSelectedAsset(null);
-    editViewForm.resetFields();
+  const handleReturnClick = (record) => {
+    setReturningAsset(record);
+    setReturnPopupVisible(record._id);
   };
-
-  const handleCancelInfoModal = () => {
-      setIsInfoModalVisible(false);
-      setAssetForInfoDetails(null);
-      infoForm.resetFields();
+  const handleReturnCancel = () => {
+    setReturnPopupVisible('');
+    setReturningAsset(null);
   };
-
+  const handleReturnConfirm = async () => {
+    if (returningAsset) {
+      await handleMoveStatus(returningAsset, 'In Stock');
+      setReturnPopupVisible('');
+      setReturningAsset(null);
+    }
+  };
 
   const handleMoveStatus = async (record, newStatus) => {
     try {
@@ -223,111 +266,55 @@ const InUse = () => {
         { headers: getAuthHeader() }
       );
       message.success(`Moved to ${newStatus}`);
-      setModalVisible(false); // Close grouped assets modal if open
-      setIsEditViewModalVisible(false); // Close edit/view modal if open
-      setIsInfoModalVisible(false); // Close info modal if open
+      setModalVisible(false);
+      setIsEditModalVisible(false);
+      setIsInfoModalVisible(false);
       fetchInUseAssets();
     } catch (error) {
       message.error(`Failed to update status to ${newStatus}`);
-      console.error(`Failed to update status to ${newStatus}:`, error.response ? error.response.data : error.message);
     }
   };
 
-  // Actions column for the assets (per-employee asset table)
-  const renderAssetActions = (record) => (
-    <Space size="middle">
-      {/* NEW: Return to Stock Button (First Option) */}
-      <Popconfirm
-        title={`Move asset "${record.model} (${record.serialNumber})" to In Stock?`}
-        onConfirm={() => handleMoveStatus(record, 'In Stock')}
-        okText="Yes"
-        cancelText="No"
-        placement="top"
-      >
-        <Button
-          type="primary"
-          icon={<RollbackOutlined />}
-          style={{ backgroundColor: getStatusColor('In Stock'), borderColor: getStatusColor('In Stock') }}
-          disabled={record.status === 'In Stock'} // Disable if already In Stock
-          title="Return to Stock"
-        >
-        </Button>
-      </Popconfirm>
-
-      {/* NEW: Info Icon for full details of individual asset */}
-      <Button
-        type="text"
-        icon={<InfoCircleOutlined style={{ fontSize: 20, color: '#1890ff' }} />}
-        onClick={() => handleInfoDetails(record)}
-        title="View Full Details"
-      />
-
-      <Button
-        type="text"
-        icon={<EditOutlined style={{ fontSize: 20 }} />}
-        onClick={() => handleEdit(record)}
-        title="Edit"
-      />
-
-      <Dropdown
-        overlay={
-          <Menu>
-            <Menu.Item key="damage">
-              <Popconfirm
-                title={`Move asset "${record.model} (${record.serialNumber})" to Damaged?`}
-                onConfirm={() => handleMoveStatus(record, 'Damaged')}
-                okText="Yes"
-                cancelText="No"
-                placement="top"
-              >
-                <span style={{ color: 'red' }}>
-                  <DamagedIcon /> Move to Damaged
-                </span>
-              </Popconfirm>
-            </Menu.Item>
-            <Menu.Item key="ewaste">
-              <Popconfirm
-                title={`Move asset "${record.model} (${record.serialNumber})" to E-Waste?`}
-                onConfirm={() => handleMoveStatus(record, 'E-Waste')}
-                okText="Yes"
-                cancelText="No"
-                placement="top"
-              >
-                <span style={{ color: '#8B572A' }}>
-                  <EWasteIcon /> Move to E-Waste
-                </span>
-              </Popconfirm>
-            </Menu.Item>
-          </Menu>
-        }
-        trigger={['click']}
-        placement="bottomRight"
-      >
-        <Button type="text" icon={<MoreOutlined style={{ fontSize: 20 }} />} />
-      </Dropdown>
-    </Space>
-  );
-
-  // Table columns for grouping by email (Main Table)
+  // Table columns
+  const getSerialNumber = (i) => (pagination.current - 1) * pagination.pageSize + i + 1;
   const columns = [
     {
       title: 'Sl No',
       key: 'slno',
-      render: (_, __, index) => index + 1,
-      width: 70,
       fixed: 'left',
+      render: (_, __, i) => getSerialNumber(i),
+      width: 70,
     },
-    { title: 'Assignee', dataIndex: 'assigneeName', key: 'assigneeName' },
-    { title: 'Email', dataIndex: 'employeeEmail', key: 'employeeEmail' },
-    { title: 'Phone', dataIndex: 'phoneNumber', key: 'phoneNumber' },
-    { title: 'Department', dataIndex: 'department', key: 'department' },
+    {
+      title: 'Assignee',
+      dataIndex: 'assigneeName',
+      key: 'assigneeName',
+      sorter: (a, b) => (a.assigneeName || '').localeCompare(b.assigneeName || ''),
+    },
+    {
+      title: 'Email',
+      dataIndex: 'employeeEmail',
+      key: 'employeeEmail',
+    },
+    {
+      title: 'Phone',
+      dataIndex: 'phoneNumber',
+      key: 'phoneNumber',
+    },
+    {
+      title: 'Department',
+      dataIndex: 'department',
+      key: 'department',
+      sorter: (a, b) => (a.department || '').localeCompare(b.department || ''),
+    },
     {
       title: 'Asset Count',
       key: 'assetCount',
       render: (_, record) => record.assets.length,
+      sorter: (a, b) => a.assets.length - b.assets.length,
     },
     {
-      title: 'Actions', // Actions for the main grouped table
+      title: 'Actions',
       key: 'actions',
       render: (_, record) => (
         <Button
@@ -342,43 +329,127 @@ const InUse = () => {
     },
   ];
 
-  // Columns for the nested table (individual assets within an employee's list)
   const employeeAssetListColumns = [
-      {
-        title: 'Sl No',
-        key: 'nestedSlNo',
-        render: (_, __, index) => index + 1,
-        width: 70,
-      },
-      { title: 'Model', dataIndex: 'model', key: 'model' },
-      { title: 'Category', dataIndex: 'category', key: 'category' },
-      { title: 'Serial Number', dataIndex: 'serialNumber', key: 'serialNumber' },
-      {
-        title: 'Purchase Date',
-        dataIndex: 'purchaseDate',
-        key: 'purchaseDate',
-        render: (date) => (date ? moment(date).format('YYYY-MM-DD') : 'N/A'),
-      },
-      {
-        title: 'Warranty Expiry',
-        dataIndex: 'warrantyInfo',
-        key: 'warrantyInfo',
-        render: (date) => renderWarrantyTag(date),
-      },
-      {
-        title: 'Actions',
-        key: 'individualAssetActions',
-        align : 'center',
-        render: (_, record) => renderAssetActions(record),
-      },
+    { title: 'Sl No', key: 'nestedSlNo', render: (_, __, i) => i + 1, width: 60 },
+    { title: 'Model', dataIndex: 'model', key: 'model' },
+    { title: 'Category', dataIndex: 'category', key: 'category' },
+    { title: 'Serial Number', dataIndex: 'serialNumber', key: 'serialNumber' },
+    {
+      title: 'Purchase Date',
+      dataIndex: 'purchaseDate',
+      key: 'purchaseDate',
+      render: (date) => (date ? moment(date).format('YYYY-MM-DD') : 'N/A'),
+    },
+    {
+      title: 'Warranty Expiry',
+      dataIndex: 'warrantyInfo',
+      key: 'warrantyInfo',
+      render: renderWarrantyTag,
+    },
+    {
+      title: 'Actions',
+      key: 'individualAssetActions',
+      align: 'center',
+      render: (_, record) => (
+        <Space size="middle">
+          <Button
+            type="primary"
+            style={{ backgroundColor: getStatusColor('In Stock'), borderColor: getStatusColor('In Stock') }}
+            disabled={record.status === 'In Stock'}
+            title="Return to Stock"
+            onClick={() => handleReturnClick(record)}
+          >
+            Return
+          </Button>
+          <Modal
+            open={returnPopupVisible === record._id}
+            onCancel={handleReturnCancel}
+            footer={[
+              <Button key="cancel" onClick={handleReturnCancel}>Cancel</Button>,
+              <Button key="confirm" type="primary" danger onClick={handleReturnConfirm}>Confirm</Button>
+            ]}
+            title="Confirm Return to In Stock"
+            centered
+            destroyOnClose
+            width={400}
+          >
+            <p>Are you sure you want to return this asset to stock?</p>
+            <div className="asset-info-table" style={{ marginBottom: 12 }}>
+              <Table
+                bordered
+                size="small"
+                pagination={false}
+                showHeader={false}
+                dataSource={[
+                  ['Model', record.model || 'N/A'],
+                  ['Category', record.category || 'N/A'],
+                  ['Serial Number', record.serialNumber || 'N/A'],
+                ].map(([label, value], idx) => ({ key: idx, label, value }))}
+                columns={[
+                  { dataIndex: 'label', key: 'label', width: 120, render: text => <strong style={{ fontSize: '13px' }}>{text}</strong> },
+                  { dataIndex: 'value', key: 'value', render: text => <span style={{ fontSize: '13px' }}>{text}</span> },
+                ]}
+              />
+            </div>
+          </Modal>
+          <Button
+            type="text"
+            icon={<InfoCircleOutlined style={{ fontSize: 20, color: '#1890ff' }} />}
+            onClick={() => handleInfoDetails(record)}
+            title="View Full Details"
+          />
+          <Button
+            type="text"
+            icon={<EditOutlined style={{ fontSize: 20 }} />}
+            onClick={() => handleEdit(record)}
+            title="Edit"
+          />
+          <Dropdown
+            overlay={
+              <Menu>
+                <Menu.Item key="damage">
+                  <Popconfirm
+                    title="Move asset to Damaged?"
+                    onConfirm={() => handleMoveStatus(record, 'Damaged')}
+                    okText="Yes"
+                    cancelText="No"
+                    placement="top"
+                  >
+                    <span style={{ color: 'red' }}>
+                      <DamagedIcon /> Move to Damaged
+                    </span>
+                  </Popconfirm>
+                </Menu.Item>
+                <Menu.Item key="ewaste">
+                  <Popconfirm
+                    title="Move asset to E-Waste?"
+                    onConfirm={() => handleMoveStatus(record, 'E-Waste')}
+                    okText="Yes"
+                    cancelText="No"
+                    placement="top"
+                  >
+                    <span style={{ color: '#8B572A' }}>
+                      <EWasteIcon /> Move to E-Waste
+                    </span>
+                  </Popconfirm>
+                </Menu.Item>
+              </Menu>
+            }
+            trigger={['click']}
+            placement="bottomRight"
+          >
+            <Button type="text" icon={<MoreOutlined />} />
+          </Dropdown>
+        </Space>
+      ),
+    },
   ];
 
   return (
     <>
+      {colorBorderStyle}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          In Use Equipment
-        </Title>
+        <Title level={4} style={{ margin: 0 }}>In Use Equipment</Title>
         <Input
           placeholder="Search all fields..."
           prefix={<SearchOutlined />}
@@ -389,137 +460,21 @@ const InUse = () => {
         />
       </div>
 
-      <div style={{
-        filter: isAnyModalOpen ? 'blur(4px)' : 'none', // Apply blur when ANY modal is open
-        pointerEvents: isAnyModalOpen ? 'none' : 'auto',
-        userSelect: isAnyModalOpen ? 'none' : 'auto',
-        transition: 'filter 0.3s ease',
-      }}>
+      <div className={isAnyModalOpen ? "instock-blur" : ""}>
         <Table
           columns={columns}
           dataSource={groupedList}
           rowKey={(record) => record.employeeEmail}
-          pagination={{ pageSize: 10 }}
+          pagination={{
+            ...pagination,
+            total: groupedList.length,
+            showTotal: total => `Total ${total} items`
+          }}
+          onChange={handleTableChange}
           scroll={{ x: 'max-content' }}
         />
       </div>
 
-      {/* Edit/View Modal (for individual assets, now 2-column) */}
-      <Modal
-        title={isViewOnlyModal ? 'Asset Details' : 'Edit Asset - Hardware & General Information'}
-        open={isEditViewModalVisible}
-        onCancel={handleCancelEditView}
-        afterClose={() => setSelectedAsset(null)}
-        footer={isViewOnlyModal
-          ? [
-            <Button key="close" onClick={handleCancelEditView}>
-              Close
-            </Button>,
-          ] : [
-            <Button key="back" onClick={handleCancelEditView}>
-              Cancel
-            </Button>,
-            <Button key="submit" type="primary" onClick={handleSaveEditView}>
-              Save
-            </Button>,
-          ]}
-        width={1000} // Increased width for 2 columns
-        centered
-        destroyOnClose // Ant Design warning: `destroyOnClose` is deprecated. Please use `destroyOnHidden` instead.
-      >
-        <Form form={editViewForm} layout="vertical">
-          <Row gutter={16}> {/* Use Row/Col for 2 columns */}
-
-            <Col span={12}><Form.Item label="Model" name="model" rules={[{ required: true }]}><Input disabled={isViewOnlyModal} /></Form.Item></Col>
-            <Col span={12}><Form.Item label="Category" name="category" rules={[{ required: true }]}><Input disabled={isViewOnlyModal} /></Form.Item></Col>
-            <Col span={12}><Form.Item label="Serial Number" name="serialNumber" rules={[{ required: true }]}><Input disabled={isViewOnlyModal} /></Form.Item></Col>
-            <Col span={12}><Form.Item label="Status" name="status" rules={[{ required: true }]}><Input disabled={isViewOnlyModal ? true : false} /></Form.Item></Col>
-            <Col span={12}><Form.Item label="Location" name="location" rules={[{ required: true }]}><Input disabled={isViewOnlyModal} /></Form.Item></Col>
-            <Col span={12}><Form.Item label="Purchase Price" name="purchasePrice"><Input disabled={isViewOnlyModal} /></Form.Item></Col>
-            <Col span={12}><Form.Item label="Purchase Date" name="purchaseDate"><DatePicker style={{ width: '100%' }} disabled={isViewOnlyModal} /></Form.Item></Col>
-            <Col span={12}><Form.Item label="Warranty Info" name="warrantyInfo"><DatePicker style={{ width: '100%' }} disabled={isViewOnlyModal} /></Form.Item></Col>
-
-            <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>Assignee & Contact Information</Title>
-            <Col span={12}><Form.Item label="Assignee Name" name="assigneeName" rules={[{ required: true }]}><Input disabled={isViewOnlyModal} /></Form.Item></Col>
-            <Col span={12}><Form.Item label="Employee Email" name="employeeEmail" rules={[{ required: true, type: 'email' }]}><Input disabled={isViewOnlyModal} /></Form.Item></Col>
-            <Col span={12}><Form.Item label="Position" name="position" rules={[{ required: true }]}><Input disabled={isViewOnlyModal} /></Form.Item></Col>
-            <Col span={12}><Form.Item label="Department" name="department" rules={[{ required: true }]}><Input disabled={isViewOnlyModal} /></Form.Item></Col>
-            <Col span={12}><Form.Item label="Phone" name="phoneNumber" rules={[{ required: true }]}><Input disabled={isViewOnlyModal} /></Form.Item></Col>
-
-            <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>Comments & Damage</Title>
-            <Col span={24}><Form.Item label="Comment" name="comment"><Input.TextArea rows={2} disabled={isViewOnlyModal} /></Form.Item></Col>
-            {(selectedAsset?.status === 'Damaged' || editViewForm.getFieldValue('status') === 'Damaged') && !isViewOnlyModal && (
-                <Col span={24}>
-                    <Form.Item label="Damage Description" name="damageDescription">
-                        <Input.TextArea rows={2} disabled={isViewOnlyModal} />
-                    </Form.Item>
-                </Col>
-            )}
-          </Row>
-        </Form>
-      </Modal>
-
-      {/* NEW: Full Info Modal (Read-Only, 4-column layout) */}
-      <Modal
-        title="Asset Full Details"
-        open={isInfoModalVisible}
-        onCancel={handleCancelInfoModal}
-        footer={[<Button key="close" onClick={handleCancelInfoModal}>Close</Button>]}
-        width={800} // Set width to 800 for 4 columns
-        centered
-        destroyOnClose // Ant Design warning: `destroyOnClose` is deprecated. Please use `destroyOnHidden` instead.
-      >
-          {assetForInfoDetails && (
-              <Form form={infoForm} layout="vertical">
-                  <Title level={5} style={{ marginTop: 0, marginBottom: 16 }}>Hardware & General Information</Title>
-                  <Row gutter={16}>
-                      {/* All fields here will be readOnly, arranged in 4 columns (span=6) */}
-                      <Col span={6}><Form.Item label="Asset ID"><Input value={assetForInfoDetails.assetId || 'N/A'} readOnly /></Form.Item></Col>
-                      <Col span={6}><Form.Item label="Category"><Input value={assetForInfoDetails.category || 'N/A'} readOnly /></Form.Item></Col>
-                      <Col span={6}><Form.Item label="Model"><Input value={assetForInfoDetails.model || 'N/A'} readOnly /></Form.Item></Col>
-                      <Col span={6}><Form.Item label="Serial Number"><Input value={assetForInfoDetails.serialNumber || 'N/A'} readOnly /></Form.Item></Col>
-                      <Col span={6}><Form.Item label="Location"><Input value={assetForInfoDetails.location || 'N/A'} readOnly /></Form.Item></Col>
-                      <Col span={6}><Form.Item label="Purchase Price"><Input value={assetForInfoDetails.purchasePrice || 'N/A'} readOnly /></Form.Item></Col>
-                      <Col span={6}><Form.Item label="Status"><Input value={assetForInfoDetails.status || 'N/A'} readOnly /></Form.Item></Col>
-                      <Col span={6}><Form.Item label="Purchase Date">
-                          <Input value={assetForInfoDetails.purchaseDate ? moment(assetForInfoDetails.purchaseDate).format('YYYY-MM-DD') : 'N/A'} readOnly />
-                      </Form.Item></Col>
-                      <Col span={6}><Form.Item label="Warranty Expiry">
-                          <Input value={assetForInfoDetails.warrantyInfo ? moment(assetForInfoDetails.warrantyInfo).format('DD MMM YYYY') : 'N/A'} readOnly />
-                      </Form.Item></Col>
-                  </Row>
-
-                  <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>Assignee & Contact Information</Title>
-                  <Row gutter={16}>
-                      <Col span={6}><Form.Item label="Assignee Name"><Input value={assetForInfoDetails.assigneeName || 'N/A'} readOnly /></Form.Item></Col>
-                      <Col span={6}><Form.Item label="Position"><Input value={assetForInfoDetails.position || 'N/A'} readOnly /></Form.Item></Col>
-                      <Col span={6}><Form.Item label="Employee Email"><Input value={assetForInfoDetails.employeeEmail || 'N/A'} readOnly /></Form.Item></Col>
-                      <Col span={6}><Form.Item label="Phone Number"><Input value={assetForInfoDetails.phoneNumber || 'N/A'} readOnly /></Form.Item></Col>
-                      <Col span={6}><Form.Item label="Department"><Input value={assetForInfoDetails.department || 'N/A'} readOnly /></Form.Item></Col>
-                  </Row>
-
-                  <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>Comments & Audit Trail</Title>
-                  <Row gutter={16}>
-                      {assetForInfoDetails.damageDescription && (
-                          <Col span={12}> {/* Damage Description takes 2 columns for better readability in 4-col context */}
-                              <Form.Item label="Damage Description">
-                                  <Input.TextArea value={assetForInfoDetails.damageDescription || 'N/A'} rows={2} readOnly />
-                              </Form.Item>
-                          </Col>
-                      )}
-                      <Col span={12}> {/* Comment takes 2 columns for better readability */}
-                          <Form.Item label="Comment">
-                              <Input.TextArea value={assetForInfoDetails.comment || 'N/A'} rows={2} readOnly />
-                          </Form.Item>
-                      </Col>
-                      <Col span={12}><Form.Item label="Created At"><Input value={assetForInfoDetails.createdAt ? moment(assetForInfoDetails.createdAt).format('DD MMM YYYY HH:mm') : 'N/A'} readOnly /></Form.Item></Col>
-                      <Col span={12}><Form.Item label="Updated At"><Input value={assetForInfoDetails.updatedAt ? moment(assetForInfoDetails.updatedAt).format('DD MMM YYYY HH:mm') : 'N/A'} readOnly /></Form.Item></Col>
-                  </Row>
-              </Form>
-          )}
-      </Modal>
-
-      {/* Modal with Asset List for selected employee */}
       <Modal
         title={`Assets assigned to ${selectedEmployeeAssets ? selectedEmployeeAssets.assigneeName : ''}`}
         open={modalVisible}
@@ -527,7 +482,6 @@ const InUse = () => {
           setModalVisible(false);
           setSelectedEmployeeAssets(null);
         }}
-        afterClose={() => setIsAnyModalOpen(false)}
         footer={[
           <Button
             key="close"
@@ -535,29 +489,122 @@ const InUse = () => {
               setModalVisible(false);
               setSelectedEmployeeAssets(null);
             }}
-          >
-            Close
-          </Button>,
+          >Close</Button>
         ]}
         width={1000}
         centered
-        destroyOnClose // Ant Design warning: `destroyOnClose` is deprecated. Please use `destroyOnHidden` instead.
+        destroyOnClose
       >
         {selectedEmployeeAssets ? (
           <Table
+            bordered
             dataSource={selectedEmployeeAssets.assets}
             rowKey="_id"
             pagination={false}
-            columns={employeeAssetListColumns} // Use dedicated columns for nested table
+            columns={employeeAssetListColumns}
             size="small"
             scroll={{ x: 'max-content' }}
+            style={{ background: '#fff' }}
           />
         ) : (
           <p>No assets found.</p>
         )}
       </Modal>
 
-      {/* Popconfirm is rendered directly in renderAssetActions. */}
+      {/* Edit Modal: Asset Info row + Assignee row, compact */}
+      <Modal
+        title="Edit Asset"
+        open={isEditModalVisible}
+        onCancel={() => { setIsEditModalVisible(false); setSelectedAsset(null); editForm.resetFields(); }}
+        footer={[
+          <Button key="cancel" onClick={() => { setIsEditModalVisible(false); setSelectedAsset(null); editForm.resetFields(); }}>Cancel</Button>,
+          <Button key="submit" type="primary" onClick={handleSaveEditView}>Save</Button>
+        ]}
+        width={700}
+        centered
+        destroyOnClose
+      >
+        {selectedAsset && (
+          <Form form={editForm} layout="vertical">
+            <Typography.Title level={5} style={{ fontSize: '14px', marginTop: 0, marginBottom: 4 }}>Asset Information</Typography.Title>
+            <Row gutter={12}>
+              <Col span={12}><Form.Item label="Model" name="model" rules={[{ required: true }]}><Input /></Form.Item></Col>
+              <Col span={12}><Form.Item label="Category" name="category" rules={[{ required: true }]}><Select>{categoryOptions.map(opt => <Option key={opt} value={opt}>{opt}</Option>)}</Select></Form.Item></Col>
+            </Row>
+            <Row gutter={12}>
+              <Col span={12}><Form.Item label="Serial Number" name="serialNumber" rules={[{ required: true }]}><Input /></Form.Item></Col>
+              <Col span={12}><Form.Item label="Status" name="status" rules={[{ required: true }]}><Select>{statusOptions.map(opt => <Option key={opt} value={opt}>{opt}</Option>)}</Select></Form.Item></Col>
+            </Row>
+            <Row gutter={12}>
+              <Col span={12}><Form.Item label="Location" name="location" rules={[{ required: true }]}><Select>{locationOptions.map(opt => <Option key={opt} value={opt}>{opt}</Option>)}</Select></Form.Item></Col>
+              <Col span={12}><Form.Item label="Purchase Price" name="purchasePrice"><Input /></Form.Item></Col>
+            </Row>
+            <Row gutter={12}>
+              <Col span={12}><Form.Item label="Purchase Date" name="purchaseDate"><DatePicker style={{ width: '100%' }} /></Form.Item></Col>
+              <Col span={12}><Form.Item label="Warranty Info" name="warrantyInfo"><DatePicker style={{ width: '100%' }} /></Form.Item></Col>
+            </Row>
+            <Typography.Title level={5} style={{ fontSize: '14px', marginTop: 20, marginBottom: 8 }}>Assignee Details</Typography.Title>
+            <Row gutter={12}>
+              <Col span={12}><Form.Item label="Assignee Name" name="assigneeName" rules={[{ required: true }]}><Input /></Form.Item></Col>
+              <Col span={12}><Form.Item label="Employee Email" name="employeeEmail" rules={[{ required: true, type: 'email' }]}><Input /></Form.Item></Col>
+            </Row>
+            <Row gutter={12}>
+              <Col span={12}><Form.Item label="Position" name="position" rules={[{ required: true }]}><Input /></Form.Item></Col>
+              <Col span={12}><Form.Item label="Department" name="department" rules={[{ required: true }]}><Input /></Form.Item></Col>
+            </Row>
+            <Row gutter={12}>
+              <Col span={12}><Form.Item label="Phone" name="phoneNumber" rules={[{ required: true }]}><Input /></Form.Item></Col>
+            </Row>
+          </Form>
+        )}
+      </Modal>
+
+      {/* Info Modal: Asset Info + Assignee, both small font */}
+      <Modal
+        title="Asset Details"
+        open={isInfoModalVisible}
+        onCancel={() => { setIsInfoModalVisible(false); setSelectedAsset(null); }}
+        footer={[
+          <Button key="close" onClick={() => { setIsInfoModalVisible(false); setSelectedAsset(null); }}>Close</Button>
+        ]}
+        width={500}
+        centered
+        destroyOnClose
+      >
+        {selectedAsset && (
+          <div>
+            <Typography.Title level={5} style={{ marginBottom: 12, fontSize: '14px' }}>Asset Information</Typography.Title>
+            <Table
+              bordered
+              size="small"
+              pagination={false}
+              showHeader={false}
+              className="asset-info-table"
+              rowClassName={() => 'small-text-row'}
+              dataSource={assetTableRows(selectedAsset).map(([label, value], idx) => ({ key: idx, label, value }))}
+              columns={[
+                { dataIndex: 'label', key: 'label', width: 180, render: text => <strong style={{ fontSize: '13px' }}>{text}</strong> },
+                { dataIndex: 'value', key: 'value', render: text => <span style={{ fontSize: '13px' }}>{text}</span> },
+              ]}
+              style={{ marginBottom: 18 }}
+            />
+            <Typography.Title level={5} style={{ marginBottom: 12, fontSize: '14px' }}>Assignee Details</Typography.Title>
+            <Table
+              bordered
+              size="small"
+              pagination={false}
+              showHeader={false}
+              className="asset-info-table"
+              rowClassName={() => 'small-text-row'}
+              dataSource={assigneeRows(selectedAsset).map(([label, value], idx) => ({ key: idx, label, value }))}
+              columns={[
+                { dataIndex: 'label', key: 'label', width: 180, render: text => <strong style={{ fontSize: '13px' }}>{text}</strong> },
+                { dataIndex: 'value', key: 'value', render: text => <span style={{ fontSize: '13px' }}>{text}</span> },
+              ]}
+            />
+          </div>
+        )}
+      </Modal>
     </>
   );
 };

@@ -8,7 +8,6 @@ import axios from 'axios';
 import AppLayout from './AppLayout';
 import LoginPage from './LoginPage';
 import Dashboard from './Dashboard';
-import MasterView from './MasterView'; // Assuming this exists
 import AddEquipment from './AddEquipment'; // Assuming this exists
 import UserManagement from './UserManagement'; // Assuming this exists
 import InStockView from './InStockView';
@@ -105,7 +104,6 @@ const App = () => {
                     >
                         {/* Dashboard is now the default child route for authenticated users */}
                         <Route index element={<Dashboard />} />
-                        <Route path="all-assets" element={<MasterView user={user} />} />
                         <Route path="in-stock" element={<InStockView user={user} />} />
                         <Route path="in-use" element={<InUse user={user} />} />
                         <Route path="damaged" element={<DamagedProducts user={user} />} />
