@@ -120,7 +120,7 @@ const assigneeRows = asset => [
   ['Department', asset.department || 'N/A'],
 ];
 
-const InUse = () => {
+const InUse = ({ user }) => {
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -197,7 +197,6 @@ const InUse = () => {
     setIsEditModalVisible(true);
   };
 
-  // CHANGED: Hard refresh after save
   const handleSaveEditView = async () => {
     try {
       const values = await editForm.validateFields();
@@ -350,98 +349,113 @@ const InUse = () => {
       title: 'Actions',
       key: 'individualAssetActions',
       align: 'center',
-      render: (_, record) => (
-        <Space size="middle">
-          <Button
-            type="primary"
-            style={{ backgroundColor: getStatusColor('In Stock'), borderColor: getStatusColor('In Stock') }}
-            disabled={record.status === 'In Stock'}
-            title="Return to Stock"
-            onClick={() => handleReturnClick(record)}
-          >
-            Return
-          </Button>
-          <Modal
-            open={returnPopupVisible === record._id}
-            onCancel={handleReturnCancel}
-            footer={[
-              <Button key="cancel" onClick={handleReturnCancel}>Cancel</Button>,
-              <Button key="confirm" type="primary" danger onClick={handleReturnConfirm}>Confirm</Button>
-            ]}
-            title="Confirm Return to In Stock"
-            centered
-            destroyOnClose
-            width={400}
-          >
-            <p>Are you sure you want to return this asset to stock?</p>
-            <div className="asset-info-table" style={{ marginBottom: 12 }}>
-              <Table
-                bordered
-                size="small"
-                pagination={false}
-                showHeader={false}
-                dataSource={[
-                  ['Model', record.model || 'N/A'],
-                  ['Category', record.category || 'N/A'],
-                  ['Serial Number', record.serialNumber || 'N/A'],
-                ].map(([label, value], idx) => ({ key: idx, label, value }))}
-                columns={[
-                  { dataIndex: 'label', key: 'label', width: 120, render: text => <strong style={{ fontSize: '13px' }}>{text}</strong> },
-                  { dataIndex: 'value', key: 'value', render: text => <span style={{ fontSize: '13px' }}>{text}</span> },
-                ]}
-              />
-            </div>
-          </Modal>
-          <Button
-            type="text"
-            icon={<InfoCircleOutlined style={{ fontSize: 20, color: '#1890ff' }} />}
-            onClick={() => handleInfoDetails(record)}
-            title="View Full Details"
-          />
-          <Button
-            type="text"
-            icon={<EditOutlined style={{ fontSize: 20 }} />}
-            onClick={() => handleEdit(record)}
-            title="Edit"
-          />
-          <Dropdown
-            overlay={
-              <Menu>
-                <Menu.Item key="damage">
-                  <Popconfirm
-                    title="Move asset to Damaged?"
-                    onConfirm={() => handleMoveStatus(record, 'Damaged')}
-                    okText="Yes"
-                    cancelText="No"
-                    placement="top"
-                  >
-                    <span style={{ color: 'red' }}>
-                      <DamagedIcon /> Move to Damaged
-                    </span>
-                  </Popconfirm>
-                </Menu.Item>
-                <Menu.Item key="ewaste">
-                  <Popconfirm
-                    title="Move asset to E-Waste?"
-                    onConfirm={() => handleMoveStatus(record, 'E-Waste')}
-                    okText="Yes"
-                    cancelText="No"
-                    placement="top"
-                  >
-                    <span style={{ color: '#8B572A' }}>
-                      <EWasteIcon /> Move to E-Waste
-                    </span>
-                  </Popconfirm>
-                </Menu.Item>
-              </Menu>
-            }
-            trigger={['click']}
-            placement="bottomRight"
-          >
-            <Button type="text" icon={<MoreOutlined />} />
-          </Dropdown>
-        </Space>
-      ),
+      render: (_, record) => {
+        const isViewer = user?.role === "Viewer";
+        return (
+          <Space size="middle">
+            <Button
+              type="primary"
+              style={{ backgroundColor: getStatusColor('In Stock'), borderColor: getStatusColor('In Stock') }}
+              disabled={record.status === 'In Stock' || isViewer}
+              title="Return to Stock"
+              onClick={() => handleReturnClick(record)}
+            >
+              Return
+            </Button>
+            <Modal
+              open={returnPopupVisible === record._id}
+              onCancel={handleReturnCancel}
+              footer={[
+                <Button key="cancel" onClick={handleReturnCancel}>Cancel</Button>,
+                <Button key="confirm" type="primary" danger onClick={handleReturnConfirm}>Confirm</Button>
+              ]}
+              title="Confirm Return to In Stock"
+              centered
+              destroyOnClose
+              width={400}
+            >
+              <p>Are you sure you want to return this asset to stock?</p>
+              <div className="asset-info-table" style={{ marginBottom: 12 }}>
+                <Table
+                  bordered
+                  size="small"
+                  pagination={false}
+                  showHeader={false}
+                  dataSource={[
+                    ['Model', record.model || 'N/A'],
+                    ['Category', record.category || 'N/A'],
+                    ['Serial Number', record.serialNumber || 'N/A'],
+                  ].map(([label, value], idx) => ({ key: idx, label, value }))}
+                  columns={[
+                    { dataIndex: 'label', key: 'label', width: 120, render: text => <strong style={{ fontSize: '13px' }}>{text}</strong> },
+                    { dataIndex: 'value', key: 'value', render: text => <span style={{ fontSize: '13px' }}>{text}</span> },
+                  ]}
+                />
+              </div>
+            </Modal>
+            <Button
+              type="text"
+              icon={<InfoCircleOutlined style={{ fontSize: 20, color: '#1890ff' }} />}
+              onClick={() => handleInfoDetails(record)}
+              title="View Full Details"
+            />
+            <Button
+              type="text"
+              icon={<EditOutlined style={{ fontSize: 20 }} />}
+              onClick={() => handleEdit(record)}
+              title="Edit"
+              disabled={isViewer}
+            />
+            <Dropdown
+              overlay={
+                <Menu>
+                  <Menu.Item key="damage" disabled={isViewer}>
+                    <Popconfirm
+                      title="Move asset to Damaged?"
+                      onConfirm={() => handleMoveStatus(record, 'Damaged')}
+                      okText="Yes"
+                      cancelText="No"
+                      placement="top"
+                      disabled={isViewer}
+                    >
+                      <span style={{
+                        color: 'red',
+                        pointerEvents: isViewer ? 'none' : undefined,
+                        opacity: isViewer ? 0.5 : 1
+                      }}>
+                        <DamagedIcon /> Move to Damaged
+                      </span>
+                    </Popconfirm>
+                  </Menu.Item>
+                  <Menu.Item key="ewaste" disabled={isViewer}>
+                    <Popconfirm
+                      title="Move asset to E-Waste?"
+                      onConfirm={() => handleMoveStatus(record, 'E-Waste')}
+                      okText="Yes"
+                      cancelText="No"
+                      placement="top"
+                      disabled={isViewer}
+                    >
+                      <span style={{
+                        color: '#8B572A',
+                        pointerEvents: isViewer ? 'none' : undefined,
+                        opacity: isViewer ? 0.5 : 1
+                      }}>
+                        <EWasteIcon /> Move to E-Waste
+                      </span>
+                    </Popconfirm>
+                  </Menu.Item>
+                </Menu>
+              }
+              trigger={['click']}
+              placement="bottomRight"
+              disabled={isViewer}
+            >
+              <Button type="text" icon={<MoreOutlined />} disabled={isViewer} />
+            </Dropdown>
+          </Space>
+        );
+      },
     },
   ];
 

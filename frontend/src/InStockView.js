@@ -21,11 +21,12 @@ import {
   EyeOutlined,
   EditOutlined,
   MoreOutlined,
-  InfoCircleOutlined, UserAddOutlined,
+  InfoCircleOutlined,
+  UserAddOutlined,
 } from '@ant-design/icons';
 import moment from 'moment';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
 // Helper for auth header
 const getAuthHeader = () => {
@@ -72,13 +73,13 @@ const InStockView = ({ user }) => {
   const [filteredData, setFilteredData] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [groupedList, setGroupedList] = useState([]);
-const [assetForInfoDetails, setAssetForInfoDetails] = useState(null);
+  const [assetForInfoDetails, setAssetForInfoDetails] = useState(null);
+
   // Modal and form states
   const [isAssignModalVisible, setIsAssignModalVisible] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState(null);
   const [form] = Form.useForm();
-   const [infoForm] = Form.useForm();
-   const { Title } = Typography;
+  const [infoForm] = Form.useForm();
 
   const [isDetailsModalVisible, setIsDetailsModalVisible] = useState(false);
   const [detailsEquipment, setDetailsEquipment] = useState(null);
@@ -192,6 +193,8 @@ const [assetForInfoDetails, setAssetForInfoDetails] = useState(null);
 
   // Render actions for individual assets in nested modal
   const renderInStockActions = (record) => {
+    const isViewer = user?.role === 'Viewer';
+
     const handleMoveStatus = async (record, newStatus) => {
       try {
         await axios.put(
@@ -217,13 +220,14 @@ const [assetForInfoDetails, setAssetForInfoDetails] = useState(null);
             okText="Yes"
             cancelText="No"
             placement="top"
-            popupAlign={{ offset: [10, -40] }}
+            disabled={isViewer}
           >
-            <span style={{ color: 'red' }}>
+            <span style={{ color: 'red', pointerEvents: isViewer ? 'none' : undefined, opacity: isViewer ? 0.5 : 1 }}>
               <WarningOutlined /> Move to Damaged
             </span>
           </Popconfirm>
         ),
+        disabled: isViewer
       },
       {
         key: 'ewaste',
@@ -234,13 +238,14 @@ const [assetForInfoDetails, setAssetForInfoDetails] = useState(null);
             okText="Yes"
             cancelText="No"
             placement="top"
-            popupAlign={{ offset: [10, -70] }}
+            disabled={isViewer}
           >
-            <span style={{ color: '#8B572A' }}>
+            <span style={{ color: '#8B572A', pointerEvents: isViewer ? 'none' : undefined, opacity: isViewer ? 0.5 : 1 }}>
               <DeleteOutlined /> Move to E-Waste
             </span>
           </Popconfirm>
         ),
+        disabled: isViewer
       },
     ];
 
@@ -257,9 +262,10 @@ const [assetForInfoDetails, setAssetForInfoDetails] = useState(null);
           icon={<UserAddOutlined style={{ fontSize: '18px' }} />}
           onClick={() => handleAssignClick(record)}
           title="Assign"
+          disabled={isViewer}
         />
-        <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-          <Button type="text" icon={<MoreOutlined style={{ fontSize: '20px' }} />} />
+        <Dropdown menu={{ items: menuItems }} trigger={['click']} disabled={isViewer}>
+          <Button type="text" icon={<MoreOutlined style={{ fontSize: '20px' }} />} disabled={isViewer} />
         </Dropdown>
       </Space>
     );
@@ -353,7 +359,7 @@ const [assetForInfoDetails, setAssetForInfoDetails] = useState(null);
       {/* Modal for nested assets of selected model */}
       <Modal
         title={`Assets under Model: ${selectedModelAssets?.model || ''}`}
-        visible={isModelAssetsModalVisible}
+        open={isModelAssetsModalVisible}
         onCancel={() => {
           setIsModelAssetsModalVisible(false);
           setSelectedModelAssets(null);
@@ -395,17 +401,19 @@ const [assetForInfoDetails, setAssetForInfoDetails] = useState(null);
         onCancel={() => setIsAssignModalVisible(false)}
         okText="Assign"
         destroyOnClose
+        okButtonProps={{ disabled: user?.role === "Viewer" }}
+        cancelButtonProps={{ disabled: user?.role === "Viewer" }}
       >
         <Form layout="vertical" form={form}>
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="assigneeName" label="Assignee Name" rules={[{ required: true }]}>
-                <Input />
+                <Input disabled={user?.role === "Viewer"} />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item name="position" label="Position" rules={[{ required: true }]}>
-                <Input />
+                <Input disabled={user?.role === "Viewer"} />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -414,17 +422,17 @@ const [assetForInfoDetails, setAssetForInfoDetails] = useState(null);
                 label="Employee Email"
                 rules={[{ required: true, type: 'email' }]}
               >
-                <Input />
+                <Input disabled={user?.role === "Viewer"} />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item name="phoneNumber" label="Phone Number" rules={[{ required: true }]}>
-                <Input />
+                <Input disabled={user?.role === "Viewer"} />
               </Form.Item>
             </Col>
             <Col span={24}>
               <Form.Item name="department" label="Department" rules={[{ required: true }]}>
-                <Input />
+                <Input disabled={user?.role === "Viewer"} />
               </Form.Item>
             </Col>
           </Row>
@@ -437,57 +445,56 @@ const [assetForInfoDetails, setAssetForInfoDetails] = useState(null);
         open={isDetailsModalVisible}
         onCancel={() => setIsDetailsModalVisible(false)}
         footer={null}
-        width={800}       // <-- add this line
-        centered   
+        width={800}
+        centered
       >
         {assetForInfoDetails && (
-                      <Form form={infoForm} layout="vertical">
-                          <Title level={5} style={{ marginTop: 0, marginBottom: 16 }}>Hardware & General Information</Title>
-                          <Row gutter={16}>
-                              {/* All fields here will be readOnly, arranged in 4 columns (span=6) */}
-                              <Col span={6}><Form.Item label="Asset ID"><Input value={assetForInfoDetails.assetId || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Category"><Input value={assetForInfoDetails.category || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Model"><Input value={assetForInfoDetails.model || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Serial Number"><Input value={assetForInfoDetails.serialNumber || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Location"><Input value={assetForInfoDetails.location || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Purchase Price"><Input value={assetForInfoDetails.purchasePrice || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Status"><Input value={assetForInfoDetails.status || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Purchase Date">
-                                  <Input value={assetForInfoDetails.purchaseDate ? moment(assetForInfoDetails.purchaseDate).format('YYYY-MM-DD') : 'N/A'} readOnly />
-                              </Form.Item></Col>
-                              <Col span={6}><Form.Item label="Warranty Expiry">
-                                  <Input value={assetForInfoDetails.warrantyInfo ? moment(assetForInfoDetails.warrantyInfo).format('DD MMM YYYY') : 'N/A'} readOnly />
-                              </Form.Item></Col>
-                          </Row>
-        
-                          <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>Assignee & Contact Information</Title>
-                          <Row gutter={16}>
-                              <Col span={6}><Form.Item label="Assignee Name"><Input value={assetForInfoDetails.assigneeName || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Position"><Input value={assetForInfoDetails.position || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Employee Email"><Input value={assetForInfoDetails.employeeEmail || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Phone Number"><Input value={assetForInfoDetails.phoneNumber || 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={6}><Form.Item label="Department"><Input value={assetForInfoDetails.department || 'N/A'} readOnly /></Form.Item></Col>
-                          </Row>
-        
-                          <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>Comments & Audit Trail</Title>
-                          <Row gutter={16}>
-                              {assetForInfoDetails.damageDescription && (
-                                  <Col span={12}> {/* Damage Description takes 2 columns for better readability in 4-col context */}
-                                      <Form.Item label="Damage Description">
-                                          <Input.TextArea value={assetForInfoDetails.damageDescription || 'N/A'} rows={2} readOnly />
-                                      </Form.Item>
-                                  </Col>
-                              )}
-                              <Col span={12}> {/* Comment takes 2 columns for better readability */}
-                                  <Form.Item label="Comment">
-                                      <Input.TextArea value={assetForInfoDetails.comment || 'N/A'} rows={2} readOnly />
-                                  </Form.Item>
-                              </Col>
-                              <Col span={12}><Form.Item label="Created At"><Input value={assetForInfoDetails.createdAt ? moment(assetForInfoDetails.createdAt).format('DD MMM YYYY HH:mm') : 'N/A'} readOnly /></Form.Item></Col>
-                              <Col span={12}><Form.Item label="Updated At"><Input value={assetForInfoDetails.updatedAt ? moment(assetForInfoDetails.updatedAt).format('DD MMM YYYY HH:mm') : 'N/A'} readOnly /></Form.Item></Col>
-                          </Row>
-                      </Form>
-                  )}
+          <Form form={infoForm} layout="vertical">
+            <Title level={5} style={{ marginTop: 0, marginBottom: 16 }}>Hardware & General Information</Title>
+            <Row gutter={16}>
+              <Col span={6}><Form.Item label="Asset ID"><Input value={assetForInfoDetails.assetId || 'N/A'} readOnly /></Form.Item></Col>
+              <Col span={6}><Form.Item label="Category"><Input value={assetForInfoDetails.category || 'N/A'} readOnly /></Form.Item></Col>
+              <Col span={6}><Form.Item label="Model"><Input value={assetForInfoDetails.model || 'N/A'} readOnly /></Form.Item></Col>
+              <Col span={6}><Form.Item label="Serial Number"><Input value={assetForInfoDetails.serialNumber || 'N/A'} readOnly /></Form.Item></Col>
+              <Col span={6}><Form.Item label="Location"><Input value={assetForInfoDetails.location || 'N/A'} readOnly /></Form.Item></Col>
+              <Col span={6}><Form.Item label="Purchase Price"><Input value={assetForInfoDetails.purchasePrice || 'N/A'} readOnly /></Form.Item></Col>
+              <Col span={6}><Form.Item label="Status"><Input value={assetForInfoDetails.status || 'N/A'} readOnly /></Form.Item></Col>
+              <Col span={6}><Form.Item label="Purchase Date">
+                <Input value={assetForInfoDetails.purchaseDate ? moment(assetForInfoDetails.purchaseDate).format('YYYY-MM-DD') : 'N/A'} readOnly />
+              </Form.Item></Col>
+              <Col span={6}><Form.Item label="Warranty Expiry">
+                <Input value={assetForInfoDetails.warrantyInfo ? moment(assetForInfoDetails.warrantyInfo).format('DD MMM YYYY') : 'N/A'} readOnly />
+              </Form.Item></Col>
+            </Row>
+
+            <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>Assignee & Contact Information</Title>
+            <Row gutter={16}>
+              <Col span={6}><Form.Item label="Assignee Name"><Input value={assetForInfoDetails.assigneeName || 'N/A'} readOnly /></Form.Item></Col>
+              <Col span={6}><Form.Item label="Position"><Input value={assetForInfoDetails.position || 'N/A'} readOnly /></Form.Item></Col>
+              <Col span={6}><Form.Item label="Employee Email"><Input value={assetForInfoDetails.employeeEmail || 'N/A'} readOnly /></Form.Item></Col>
+              <Col span={6}><Form.Item label="Phone Number"><Input value={assetForInfoDetails.phoneNumber || 'N/A'} readOnly /></Form.Item></Col>
+              <Col span={6}><Form.Item label="Department"><Input value={assetForInfoDetails.department || 'N/A'} readOnly /></Form.Item></Col>
+            </Row>
+
+            <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>Comments & Audit Trail</Title>
+            <Row gutter={16}>
+              {assetForInfoDetails.damageDescription && (
+                <Col span={12}>
+                  <Form.Item label="Damage Description">
+                    <Input.TextArea value={assetForInfoDetails.damageDescription || 'N/A'} rows={2} readOnly />
+                  </Form.Item>
+                </Col>
+              )}
+              <Col span={12}>
+                <Form.Item label="Comment">
+                  <Input.TextArea value={assetForInfoDetails.comment || 'N/A'} rows={2} readOnly />
+                </Form.Item>
+              </Col>
+              <Col span={12}><Form.Item label="Created At"><Input value={assetForInfoDetails.createdAt ? moment(assetForInfoDetails.createdAt).format('DD MMM YYYY HH:mm') : 'N/A'} readOnly /></Form.Item></Col>
+              <Col span={12}><Form.Item label="Updated At"><Input value={assetForInfoDetails.updatedAt ? moment(assetForInfoDetails.updatedAt).format('DD MMM YYYY HH:mm') : 'N/A'} readOnly /></Form.Item></Col>
+            </Row>
+          </Form>
+        )}
       </Modal>
 
       {/* External Popconfirm for status change */}
