@@ -1,10 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Table, Button, Modal, Form, Input, Select, message, Card, Typography, Popconfirm, Space } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
 const { Title } = Typography;
 const { Option } = Select;
+
+const roles = [
+    { value: 'Admin', label: 'Admin' },
+    { value: 'Editor', label: 'Editor' },
+    { value: 'Viewer', label: 'Viewer' },
+];
 
 const getAuthHeader = () => {
     const token = localStorage.getItem('token');
@@ -15,7 +21,10 @@ const UserManagement = () => {
     const [users, setUsers] = useState([]);
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [form] = Form.useForm();
+    const [formEdit] = Form.useForm();
+    const [editModal, setEditModal] = useState({ visible: false, user: null });
 
+    // Fetch users from backend
     const fetchUsers = useCallback(async () => {
         try {
             const res = await axios.get('http://localhost:5000/api/users', { headers: getAuthHeader() });
@@ -29,6 +38,7 @@ const UserManagement = () => {
         fetchUsers();
     }, [fetchUsers]);
 
+    // Add User Modal
     const showAddUserModal = () => {
         form.resetFields();
         setIsModalVisible(true);
@@ -40,23 +50,58 @@ const UserManagement = () => {
 
     const handleAddUser = async (values) => {
         try {
-            await axios.post('http://localhost:5000/api/users/create', values, { headers: getAuthHeader() });
+            await axios.post(
+                'http://localhost:5000/api/users/create',
+                {
+                    email: values.email,
+                    password: values.password,
+                    role: values.role,
+                },
+                { headers: getAuthHeader() }
+            );
             message.success('User created successfully!');
             setIsModalVisible(false);
-            fetchUsers(); // Refresh user list
+            fetchUsers();
         } catch (err) {
             message.error(err.response?.data?.msg || 'Failed to create user.');
         }
     };
-    
+
     const handleDeleteUser = async (userId) => {
         try {
-            // FIX: Use the DELETE method for deleting resources
             await axios.delete(`http://localhost:5000/api/users/${userId}`, { headers: getAuthHeader() });
             message.success('User deleted successfully');
-            fetchUsers(); // Refresh user list
+            fetchUsers();
         } catch (err) {
             message.error(err.response?.data?.msg || 'Failed to delete user.');
+        }
+    };
+
+    // Edit User Modal (role only)
+    const showEditModal = (user) => {
+        setEditModal({ visible: true, user });
+        setTimeout(() => {
+            formEdit.setFieldsValue({
+                email: user.email,
+                role: user.role,
+            });
+        }, 0);
+    };
+
+    const handleEditRole = async () => {
+        try {
+            const values = await formEdit.validateFields();
+            await axios.put(
+                `http://localhost:5000/api/users/${editModal.user._id}`,
+                { role: values.role },
+                { headers: getAuthHeader() }
+            );
+            message.success('Role updated successfully!');
+            setEditModal({ visible: false, user: null });
+            fetchUsers();
+            formEdit.resetFields();
+        } catch (err) {
+            message.error(err.response?.data?.msg || 'Failed to update role.');
         }
     };
 
@@ -66,27 +111,58 @@ const UserManagement = () => {
         {
             title: 'Action',
             key: 'action',
+            align: 'center',
             render: (_, record) => (
-                <Popconfirm title="Are you sure you want to delete this user?" onConfirm={() => handleDeleteUser(record._id)} okText="Yes" cancelText="No">
-                    <Button type="link" danger icon={<DeleteOutlined />}>
-                        Delete
+                <Space>
+                    <Button
+                        type="link"
+                        icon={<EditOutlined />}
+                        onClick={() => showEditModal(record)}
+                    >
+                        Edit
                     </Button>
-                </Popconfirm>
+                    <Popconfirm
+                        title="Are you sure you want to delete this user?"
+                        onConfirm={() => handleDeleteUser(record._id)}
+                        okText="Yes"
+                        cancelText="No"
+                    >
+                        <Button type="link" danger icon={<DeleteOutlined />}>
+                            Delete
+                        </Button>
+                    </Popconfirm>
+                </Space>
             ),
         },
     ];
 
     return (
         <Card>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                marginBottom: 16, flexWrap: 'wrap', gap: 8
+            }}>
                 <Title level={4} style={{ margin: 0 }}>User Management</Title>
                 <Button type="primary" icon={<PlusOutlined />} onClick={showAddUserModal}>
                     Add User
                 </Button>
             </div>
-            <Table columns={columns} dataSource={users} rowKey="_id" />
+            <Table
+                columns={columns}
+                dataSource={users}
+                rowKey="_id"
+                pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: ['10', '20', '50', '100'] }}
+                style={{ width: '100%', minWidth: 300 }}
+            />
 
-            <Modal title="Add New User" open={isModalVisible} onCancel={handleCancel} footer={null} destroyOnClose>
+            {/* Add User Modal */}
+            <Modal
+                title="Add New User"
+                open={isModalVisible}
+                onCancel={handleCancel}
+                footer={null}
+                destroyOnHidden
+            >
                 <Form form={form} layout="vertical" onFinish={handleAddUser}>
                     <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
                         <Input />
@@ -96,9 +172,7 @@ const UserManagement = () => {
                     </Form.Item>
                     <Form.Item name="role" label="Role" rules={[{ required: true }]}>
                         <Select placeholder="Select a role">
-                            <Option value="Admin">Admin</Option>
-                            <Option value="Editor">Editor</Option>
-                            <Option value="Viewer">Viewer</Option>
+                            {roles.map(r => <Option value={r.value} key={r.value}>{r.label}</Option>)}
                         </Select>
                     </Form.Item>
                     <Form.Item>
@@ -108,6 +182,40 @@ const UserManagement = () => {
                         </Space>
                     </Form.Item>
                 </Form>
+            </Modal>
+
+            {/* Edit Role Modal (only role editable) */}
+            <Modal
+                title="Edit User Role"
+                open={editModal.visible}
+                onCancel={() => {
+                    setEditModal({ visible: false, user: null });
+                    formEdit.resetFields();
+                }}
+                onOk={handleEditRole}
+                okText="Save"
+                cancelText="Cancel"
+                destroyOnHidden
+            >
+                {editModal.user && (
+                    <Form
+                        form={formEdit}
+                        layout="vertical"
+                        initialValues={{
+                            email: editModal.user.email,
+                            role: editModal.user.role
+                        }}
+                    >
+                        <Form.Item label="Email" name="email">
+                            <Input disabled />
+                        </Form.Item>
+                        <Form.Item label="Role" name="role" rules={[{ required: true, message: 'Please select a role' }]}>
+                            <Select placeholder="Select a role">
+                                {roles.map(r => <Option value={r.value} key={r.value}>{r.label}</Option>)}
+                            </Select>
+                        </Form.Item>
+                    </Form>
+                )}
             </Modal>
         </Card>
     );
