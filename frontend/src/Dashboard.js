@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Card, Col, Row, Statistic, Typography, Spin, Alert, Button, Space, List, Tag } from 'antd';
 import {
     DatabaseOutlined, CheckCircleOutlined, ToolOutlined, WarningOutlined, DeleteOutlined,
-    LaptopOutlined, DesktopOutlined, AudioOutlined,
+    LaptopOutlined, DesktopOutlined, CustomerServiceOutlined,
     // NEW ICONS FOR KEYBOARD AND MOUSE
     AimOutlined, BorderlessTableOutlined // Used for Mouse and Keyboard respectively
 } from '@ant-design/icons'; // Ensure these icons are imported
@@ -91,7 +91,7 @@ const getCategoryIcon = (category) => {
         case 'Laptop':
             return <LaptopOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />;
         case 'Headset':
-            return <AudioOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />;
+            return <CustomerServiceOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />;
         case 'Mouse':
             return <AimOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />; // CHANGED to AimOutlined
         case 'Keyboard': // ADDED 'Keyboard' case

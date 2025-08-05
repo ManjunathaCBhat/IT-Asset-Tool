@@ -6,56 +6,62 @@ import axios from 'axios';
 
 // --- Component and Layout Imports ---
 import AppLayout from './AppLayout';
-import LoginPage from './LoginPage';
+import LoginPage, { AuthProvider, RoleBanner, useAuth } from './LoginPage';
 import Dashboard from './Dashboard';
-import MasterView from './MasterView'; // Assuming this exists
-import AddEquipment from './AddEquipment'; // Assuming this exists
-import UserManagement from './UserManagement'; // Assuming this exists
+import MasterView from './MasterView';
+import AddEquipment from './AddEquipment';
+import UserManagement from './UserManagement';
 import InStockView from './InStockView';
 import InUse from './InUse';
-import DamagedProducts from './DamagedProducts'; // Assuming this exists
-import EWaste from './EWaste'; // Assuming this exists
-import WelcomePage from './WelcomePage'; // Assuming this exists
-import ResetPasswordPage from './ResetPasswordPage'; // Assuming this exists
-import RemovedAssetsTable from './RemovedAssetsTable'; // Assuming this exists
+import DamagedProducts from './DamagedProducts';
+import EWaste from './EWaste';
+import WelcomePage from './WelcomePage';
+import ResetPasswordPage from './ResetPasswordPage';
+import RemovedAssetsTable from './RemovedAssetsTable';
 
-const App = () => {
-    const [user, setUser] = useState(null);
+// Main App Content Component (needs to be inside AuthProvider to use useAuth)
+const AppContent = () => {
     const [loading, setLoading] = useState(true);
     const [expiringItems, setExpiringItems] = useState([]);
+    const { user, token, logout: contextLogout, saveSession } = useAuth();
 
-    // --- Auth and Logout Logic ---
+    // --- Logout Logic ---
     const handleLogout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        setUser(null);
+        contextLogout(); // Use context logout
         delete axios.defaults.headers.common['x-auth-token'];
         message.info('Logged out successfully!');
     };
 
-    // --- Fetch expiring items (placed here to be available for AppLayout header) ---
-    const fetchExpiringItems = async (token) => {
-        if (!token) return;
+    // --- Fetch expiring items ---
+    const fetchExpiringItems = async (authToken) => {
+        if (!authToken) return;
         try {
             const response = await axios.get('http://localhost:5000/api/equipment/expiring-warranty', {
-                headers: { 'x-auth-token': token }
+                headers: { 'x-auth-token': authToken }
             });
             setExpiringItems(response.data);
         } catch (error) {
             console.error('Error fetching expiring items:', error.response ? error.response.data : error.message);
-            // Optionally show a message to the user, but handle 400 errors from backend specifically if needed
         }
     };
 
+    // Initialize from localStorage on mount
     useEffect(() => {
-        const token = localStorage.getItem('token');
+        const storedToken = localStorage.getItem('token');
         const userData = localStorage.getItem('user');
-        if (token && userData) {
+        
+        if (storedToken && userData && !user) {
             try {
                 const parsedUser = JSON.parse(userData);
-                setUser(parsedUser);
-                axios.defaults.headers.common['x-auth-token'] = token;
-                fetchExpiringItems(token); // Fetch expiring items on initial load if user is logged in
+                // Sync with AuthContext
+                saveSession({ 
+                    token: storedToken, 
+                    user: parsedUser, 
+                    info: '' // Will be fetched by context
+                });
+                axios.defaults.headers.common['x-auth-token'] = storedToken;
             } catch (e) {
                 console.error("Failed to parse user from localStorage", e);
                 localStorage.removeItem('user');
@@ -63,24 +69,55 @@ const App = () => {
             }
         }
         setLoading(false);
-    }, []);
+    }, [user, saveSession]);
+
+    // Fetch expiring items when token changes
+    useEffect(() => {
+        if (token) {
+            axios.defaults.headers.common['x-auth-token'] = token;
+            fetchExpiringItems(token);
+        }
+    }, [token]);
 
     const handleLogin = (data) => {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        setUser(data.user);
+        
+        // Save to context (this will trigger the banner)
+        saveSession(data);
+        
         axios.defaults.headers.common['x-auth-token'] = data.token;
-        fetchExpiringItems(data.token); // Fetch expiring items after successful login
+        fetchExpiringItems(data.token);
+    };
+
+    // --- Role-based route protection ---
+    const ProtectedRoute = ({ children, requiredRole }) => {
+        if (!user) return <Navigate to="/login" replace />;
+        
+        if (requiredRole) {
+            const roleHierarchy = { 'Admin': 3, 'Editor': 2, 'Viewer': 1 };
+            const userLevel = roleHierarchy[user.role] || 0;
+            const requiredLevel = roleHierarchy[requiredRole] || 0;
+            
+            if (userLevel < requiredLevel) {
+                message.warning(`Access denied. ${requiredRole} role required.`);
+                return <Navigate to="/" replace />;
+            }
+        }
+        
+        return children;
     };
 
     // --- Render Logic ---
     if (loading) {
-        // Antd Spin tip warning fix: Use fullscreen or nested pattern
         return <Spin spinning={true} size="large" tip="Loading..." fullscreen />;
     }
 
     return (
         <Router>
+            {/* Role banner - only shows when user is authenticated and has role info */}
+            {user && <RoleBanner />}
+            
             <Routes>
                 {/* Conditional routing based on user authentication */}
                 {!user ? (
@@ -88,8 +125,8 @@ const App = () => {
                     <>
                         <Route path="/" element={<WelcomePage />} />
                         <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
-                        <Route path="*" element={<Navigate to="/" replace />} />
                         <Route path="/reset-password" element={<ResetPasswordPage />} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
                     </>
                 ) : (
                     // --- Routes for AUTHENTICATED users ---
@@ -105,34 +142,50 @@ const App = () => {
                     >
                         {/* Dashboard is now the default child route for authenticated users */}
                         <Route index element={<Dashboard />} />
+                        
+                        {/* All users can view these pages */}
                         <Route path="all-assets" element={<MasterView user={user} />} />
                         <Route path="in-stock" element={<InStockView user={user} />} />
                         <Route path="in-use" element={<InUse user={user} />} />
                         <Route path="damaged" element={<DamagedProducts user={user} />} />
                         <Route path="e-waste" element={<EWaste user={user} />} />
-                        <Route path="removed" element={<RemovedAssetsTable user={user} />} /> {/* New route for removed assets */}
+                        <Route path="removed" element={<RemovedAssetsTable user={user} />} />
+                        
+                        {/* Admin and Editor only pages */}
                         <Route
                             path="add"
                             element={
-                                (user.role === 'Admin' || user.role === 'Editor')
-                                ? <AddEquipment />
-                                : <Navigate to="/" />
+                                <ProtectedRoute requiredRole="Editor">
+                                    <AddEquipment />
+                                </ProtectedRoute>
                             }
                         />
+                        
+                        {/* Admin only pages */}
                         <Route
                             path="users"
                             element={
-                                user.role === 'Admin'
-                                ? <UserManagement user={user} />
-                                : <Navigate to="/" />
+                                <ProtectedRoute requiredRole="Admin">
+                                    <UserManagement user={user} />
+                                </ProtectedRoute>
                             }
                         />
+                        
                         {/* Fallback to Dashboard for any unknown paths for authenticated users */}
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
                 )}
             </Routes>
         </Router>
+    );
+};
+
+// Main App Component with AuthProvider
+const App = () => {
+    return (
+        <AuthProvider>
+            <AppContent />
+        </AuthProvider>
     );
 };
 

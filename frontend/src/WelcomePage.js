@@ -9,12 +9,24 @@ const WelcomePage = () => {
     const [buttonHovered, setButtonHovered] = useState(false); // State for button hover effect
 
     useEffect(() => {
+        // Set body styles to prevent scrolling
+        document.body.style.margin = '0';
+        document.body.style.padding = '0';
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+
         const handleResize = () => {
             setWindowWidth(window.innerWidth);
             setWindowHeight(window.innerHeight);
         };
         window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
+        
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            // Reset body styles
+            document.body.style.overflow = '';
+            document.documentElement.style.overflow = '';
+        };
     }, []);
 
     const isMobile = windowWidth <= 768;
@@ -23,22 +35,29 @@ const WelcomePage = () => {
 
     // --- Image Paths (ensure these are correct relative to your public folder) ---
     const logoSrc = `${process.env.PUBLIC_URL}/C_Lab Logo.png`;
-    const heroBgSrc = `${process.env.PUBLIC_URL}/eae123d71b02e34da63aec2a6f8ecd450165c106.png`;
+
 
     // --- Inline Style Objects ---
 
     const globalBodyStyle = {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         margin: 0,
         padding: 0,
         fontFamily: "'Poly', sans-serif",
         backgroundColor: '#ffffff',
         color: 'rgba(0, 0, 0, 0.78)',
         boxSizing: 'border-box',
-        minHeight: '100vh',
+        width: '100vw',
+        height: '100vh',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
     };
+
     const containerStyle = {
         maxWidth: '1440px',
         marginLeft: 'auto',
@@ -48,10 +67,12 @@ const WelcomePage = () => {
         ...(isTablet && { paddingLeft: '10px', paddingRight: '10px' }),
         ...(isMobile && { paddingLeft: '5px', paddingRight: '5px' }),
     };
+
     const linkBaseStyle = {
         textDecoration: 'none',
         color: 'inherit',
     };
+
     const ulBaseStyle = {
         margin: 0,
         padding: 0,
@@ -66,12 +87,15 @@ const WelcomePage = () => {
         paddingLeft: isLargeDesktop ? '8px' : '15px',
         paddingRight: isLargeDesktop ? '10px' : '15px',
         flexShrink: 0,
+        minHeight: 'auto',
     };
+
     const headerContainerStyle = {
         ...containerStyle,
         display: 'flex',
         flexDirection: 'column',
     };
+
     const headerTopStyle = {
         display: 'flex',
         justifyContent: 'flex-end',
@@ -81,21 +105,25 @@ const WelcomePage = () => {
         marginTop: isMobile ? '5px' : '10px',
         ...(isMobile && { justifyContent: 'center', marginBottom: '6px', flexWrap: 'wrap' }),
     };
+
     const locationNavUlStyle = {
         ...ulBaseStyle,
         display: 'flex',
         alignItems: 'center',
         ...(isMobile && { flexWrap: 'wrap', justifyContent: 'center' }),
     };
+
     const locationNavLiStyle = {
         position: 'relative',
         padding: isMobile ? '0 6px' : '0 8px',
     };
+
     const separatorStyle = {
         borderRight: '1px solid #ccc',
         height: isMobile ? '12px' : '14px',
         margin: isMobile ? '0 6px' : '0 8px',
     };
+
     const locationNavAStyle = {
         fontFamily: "'Crimson Text', serif",
         fontSize: isMobile ? '12px' : '13px',
@@ -105,6 +133,7 @@ const WelcomePage = () => {
         whiteSpace: 'nowrap',
         ...linkBaseStyle,
     };
+
     const callIconStyle = {
         marginRight: isMobile ? '3px' : '5px',
         color: '#0f3374',
@@ -119,6 +148,7 @@ const WelcomePage = () => {
         gap: '20px',
         ...(isMobile && { flexWrap: 'wrap', justifyContent: 'center', gap: '10px' }),
     };
+
     const logoBaseStyle = {
         width: isMobile ? '100px' : '150px',
         height: 'auto',
@@ -136,27 +166,17 @@ const WelcomePage = () => {
         padding: isMobile ? '20px 0' : '30px 0',
         overflow: 'hidden',
         textAlign: 'center',
+        minHeight: 0, // Allow flex shrinking
     };
-    const heroBackgroundStyle = {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        zIndex: -1,
-    };
-    const heroBackgroundImgStyle = {
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
-        objectPosition: 'center',
-    };
+
+
     const heroContentStyle = {
         maxWidth: isMobile ? '90%' : '800px',
         padding: isMobile ? '10px' : '20px',
         boxSizing: 'border-box',
         zIndex: 1,
     };
+
     const heroTitleStyle = {
         fontFamily: "'Crimson Text', serif",
         fontSize: isMobile ? '28px' : '36px',
@@ -166,6 +186,7 @@ const WelcomePage = () => {
         marginTop: 0,
         marginBottom: isMobile ? '10px' : '12px',
     };
+
     const heroTextStyle = {
         fontFamily: "'Poly', sans-serif",
         fontSize: isMobile ? '14px' : '18px',
@@ -174,6 +195,7 @@ const WelcomePage = () => {
         letterSpacing: '1.3px',
         marginBottom: isMobile ? '10px' : '15px',
     };
+
     const heroButtonStyle = {
         display: 'inline-block',
         background: buttonHovered ? '#b01f1f' : '#dc2626', // Change color on hover
@@ -187,16 +209,20 @@ const WelcomePage = () => {
         textAlign: 'center',
         transition: 'background 0.3s ease, transform 0.3s ease', // Smooth transition
         transform: buttonHovered ? 'scale(1.05)' : 'scale(1)', // Slight scale on hover
+        border: 'none',
+        cursor: 'pointer',
         ...linkBaseStyle,
     };
 
-    // Footer Styles (unchanged)
+    // Footer Styles
     const siteFooterStyle = {
         backgroundColor: '#36548b',
         color: '#ffffff',
         padding: isMobile ? '5px 0' : '8px 0',
         flexShrink: 0,
+        minHeight: 'auto',
     };
+
     const footerContainerStyle = {
         ...containerStyle,
         display: 'flex',
@@ -206,19 +232,21 @@ const WelcomePage = () => {
         flexDirection: 'column',
         textAlign: 'center',
     };
+
     const footerLogoImgStyle = {
         width: isMobile ? '80px' : '100px',
         height: 'auto',
         marginBottom: '3px',
         filter: 'drop-shadow(2px 2px 3px rgba(0,0,0,0.2))',
     };
+
     const copyrightTextStyle = {
         fontFamily: "'Poly', sans-serif",
         fontSize: isMobile ? '8px' : '10px',
         letterSpacing: '0.8px',
         color: '#ffffff',
+        margin: 0,
     };
-
 
     return (
         <div style={globalBodyStyle}>
@@ -276,9 +304,6 @@ const WelcomePage = () => {
 
             {/* Hero Section */}
             <section id="hero" style={heroSectionStyle}>
-                <div style={heroBackgroundStyle}>
-                    <img src={heroBgSrc} alt="Dotted background pattern" style={heroBackgroundImgStyle} />
-                </div>
                 <div style={heroContentStyle}>
                     <h1 style={heroTitleStyle}>Welcome To AssetTracker</h1>
                     <p style={heroTextStyle}>

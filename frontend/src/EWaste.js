@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Table, Typography, message, Input, Space, Popconfirm, Button } from 'antd'; // Import Popconfirm and Button
-import { DeleteOutlined } from '@ant-design/icons'; // Import DeleteOutlined icon
+import { DeleteOutlined,MinusCircleOutlined } from '@ant-design/icons'; // Import DeleteOutlined icon
 import moment from 'moment'; // Import moment for handling dates
 
 const { Title } = Typography;
@@ -70,13 +70,6 @@ const EWaste = () => {
                 item.comment?.toLowerCase().includes(searchText.toLowerCase())
             )); // Re-apply search filter
 
-            // You might want to navigate to the "Removed" page or just let the user click the button.
-            // If you want to auto-navigate, you'd need `useNavigate` from `react-router-dom` here.
-            // Example if you choose to navigate:
-            // import { useNavigate } from 'react-router-dom';
-            // const navigate = useNavigate();
-            // navigate('/removed');
-
         } catch (error) {
             console.error('Error moving asset to Removed:', error);
             message.error('Failed to move asset to Removed. Please try again.');
@@ -121,7 +114,7 @@ const EWaste = () => {
                     okText="Yes"
                     cancelText="No"
                 >
-                    <Button type="link" danger icon={<DeleteOutlined />}>
+                    <Button type="link" danger icon={<MinusCircleOutlined />}>
                         Remove
                     </Button>
                 </Popconfirm>
