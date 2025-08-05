@@ -1,21 +1,17 @@
-// src/RemovedAssetsTable.js
 import React, { useEffect, useState } from 'react';
-import { Table, Spin, Alert, Typography, Input, Space, Tag } from 'antd'; // Added Tag for renderWarrantyTag
+import { Table, Spin, Alert, Typography, Input, Space, Tag } from 'antd';
 import axios from 'axios';
 import moment from 'moment';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
 
-// Re-using renderWarrantyTag (or ensure it's in a shared utils file)
 const renderWarrantyTag = (date) => {
     if (!date) return 'N/A';
     const warrantyDate = moment(date);
     if (!warrantyDate.isValid()) return 'Invalid Date';
-
     const today = moment();
     const thirtyDaysFromNow = moment().add(30, 'days');
-
     if (warrantyDate.isBefore(today, 'day')) {
         return <Tag color="error">Expired: {warrantyDate.format('DD MMM YYYY')}</Tag>;
     }
@@ -25,13 +21,18 @@ const renderWarrantyTag = (date) => {
     return warrantyDate.format('DD MMM YYYY');
 };
 
-
 const RemovedAssetsTable = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [allRemovedAssets, setAllRemovedAssets] = useState([]);
     const [filteredRemovedAssets, setFilteredRemovedAssets] = useState([]);
     const [searchText, setSearchText] = useState('');
+    const [pagination, setPagination] = useState({
+        current: 1,
+        pageSize: 10,
+        pageSizeOptions: ['10', '20', '50', '100'],
+        showSizeChanger: true,
+    });
 
     const getAuthHeader = () => {
         const token = localStorage.getItem('token');
@@ -42,25 +43,14 @@ const RemovedAssetsTable = () => {
         try {
             setLoading(true);
             setError(null);
-            console.log('Attempting to fetch removed assets from /api/equipment/removed');
             const response = await axios.get('http://localhost:5000/api/equipment/removed', {
                 headers: getAuthHeader(),
             });
-
             const receivedData = response.data;
-            console.log('Received removed assets data:', receivedData);
             setAllRemovedAssets(receivedData);
             setFilteredRemovedAssets(receivedData);
-
         } catch (err) {
-            console.error('Failed to fetch removed assets:', err.response ? err.response.data : err.message);
-            if (err.response && (err.response.status === 401 || err.response.status === 403)) {
-                setError('You are not authorized to view removed assets. Please log in with appropriate permissions.');
-            } else if (err.response && err.response.status === 404) {
-                 setError('Removed assets endpoint not found. Please ensure your backend has /api/equipment/removed route.');
-            } else {
-                setError('Failed to load removed asset data. Please ensure the backend is running and you have proper access.');
-            }
+            setError('Failed to load removed asset data. Please ensure the backend is running and you have proper access.');
         } finally {
             setLoading(false);
         }
@@ -80,27 +70,40 @@ const RemovedAssetsTable = () => {
                 (item.serialNumber && item.serialNumber.toLowerCase().includes(lowercasedValue)) ||
                 (item.originalStatus && item.originalStatus.toLowerCase().includes(lowercasedValue)) ||
                 (item.comment && item.comment.toLowerCase().includes(lowercasedValue)) ||
-                (item.assigneeName && item.assigneeName.toLowerCase().includes(lowercasedValue)) // Added assigneeName search
+                (item.assigneeName && item.assigneeName.toLowerCase().includes(lowercasedValue))
             );
             setFilteredRemovedAssets(filtered);
+            setPagination(p => ({ ...p, current: 1 })); // reset to first page on search
         } else {
             setFilteredRemovedAssets(allRemovedAssets);
         }
+    };
+
+    const handleTableChange = (pag) => {
+        setPagination(prev => ({
+            ...prev,
+            current: pag.current,
+            pageSize: pag.pageSize,
+        }));
     };
 
     const columns = [
         {
             title: 'Sl No',
             key: 'slno',
-            render: (_, __, index) => index + 1,
+            render: (_, __, index) => (
+                (pagination.current - 1) * pagination.pageSize + index + 1
+            ),
             width: 70,
         },
         {
             title: 'Category',
             dataIndex: 'category',
             key: 'category',
-            filters: [...new Set(allRemovedAssets.map(item => item.category))].map(cat => ({ text: cat, value: cat })),
-            onFilter: (value, record) => record.category.indexOf(value) === 0,
+            filters: [
+                ...Array.from(new Set(allRemovedAssets.map(item => item.category)))
+            ].filter(Boolean).map(cat => ({ text: cat, value: cat })),
+            onFilter: (value, record) => record.category === value,
         },
         {
             title: 'Model',
@@ -113,47 +116,32 @@ const RemovedAssetsTable = () => {
             key: 'serialNumber',
         },
         {
-            title: 'Assignee Name', // Added Assignee Name
+            title: 'Assignee Name',
             dataIndex: 'assigneeName',
             key: 'assigneeName',
         },
         {
-            title: 'Original Status', // Renamed from Last Status for clarity
-            dataIndex: 'status', // Assuming 'status' now stores the original status upon removal
-            key: 'originalStatus',
-            render: (status) => <Text strong>{status}</Text>,
-            filters: [
-                { text: 'Damaged', value: 'Damaged' },
-                { text: 'E-Waste', value: 'E-Waste' },
-                { text: 'In Use', value: 'In Use' }, // Assuming it could have been in use when removed
-                { text: 'In Stock', value: 'In Stock' }, // Assuming it could have been in stock when removed
-            ].filter(filter => allRemovedAssets.some(item => item.status === filter.value)), // Only show filters for statuses actually present
-            onFilter: (value, record) => record.status === value,
-        },
-        {
             title: 'Removal Date',
-            dataIndex: 'updatedAt', // Assuming 'updatedAt' captures the removal date
+            dataIndex: 'updatedAt',
             key: 'removalDate',
             render: (date) => date ? moment(date).format('DD MMM YYYY HH:mm') : 'N/A',
         },
         {
-            title: 'Comment', // Display comment for context
+            title: 'Comment',
             dataIndex: 'comment',
             key: 'comment',
-            ellipsis: true, // Truncate long comments
+            ellipsis: true,
         }
     ];
 
     return (
-        // Spin component wraps the entire content, controlled by 'loading' state
         <Spin spinning={loading} size="large" tip="Loading removed assets...">
             <div style={{ padding: '20px' }}>
                 {error && <Alert message="Error" description={error} type="error" showIcon style={{ marginBottom: 16 }} />}
-
                 <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
                     <Title level={3}>Removed Assets -</Title>
-                    <div style={{ marginTop: 14,  marginLeft: 1, color: '#888', fontSize: 14 }}>
-                    Implies the asset has left the organization's control, either through sale, donation, or disposal.
+                    <div style={{ marginTop: 14, marginLeft: 1, color: '#888', fontSize: 14 }}>
+                        Implies the asset has left the organization's control, either through sale, donation, or disposal.
                     </div>
                     <Search
                         placeholder="Search removed assets..."
@@ -164,14 +152,16 @@ const RemovedAssetsTable = () => {
                         style={{ width: 300 }}
                     />
                 </Space>
-
                 <Table
                     columns={columns}
                     dataSource={filteredRemovedAssets}
                     rowKey="_id"
-                    pagination={{ pageSize: 10 }}
-                    // Fixed Ant Design warning: `bordered` is deprecated. Please use `variant` instead.
-                    // This warning doesn't explicitly appear in your provided code for Table, but good to note.
+                    pagination={{
+                        ...pagination,
+                        total: filteredRemovedAssets.length,
+                        showTotal: total => `Total ${total} items`,
+                    }}
+                    onChange={handleTableChange}
                 />
             </div>
         </Spin>
