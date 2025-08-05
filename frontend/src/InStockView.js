@@ -27,16 +27,16 @@ const inlineStyles = (
   </style>
 );
 
-// Compact info table style
+// Compact info table style with slightly larger font
 const infoTableCompactStyles = (
   <style>
     {`
     .asset-info-table .ant-table-cell,
     .asset-info-table .ant-table-thead > tr > th,
     .asset-info-table .ant-table-tbody > tr > td {
-      font-size: 13px !important;
-      padding: 4px 8px !important;
-      line-height: 1.3 !important;
+      font-size: 15px !important;
+      padding: 6px 12px !important;
+      line-height: 1.4 !important;
     }
     `}
   </style>
@@ -188,6 +188,7 @@ const InStockView = () => {
     setIsAssignModalVisible(true);
   };
 
+  // Assign: on success, reload page!
   const handleAssignSubmit = async () => {
     try {
       const values = await assignForm.validateFields();
@@ -199,12 +200,13 @@ const InStockView = () => {
       setIsAssignModalVisible(false);
       setAssetToAssign(null);
       message.success('Asset assigned.');
-      fetchAssets(); // immediate!
+      window.location.reload(); // Hard page reload
     } catch {
       message.error('Failed to assign.');
     }
   };
 
+  // Edit: on success, reload page!
   const handleEdit = (asset) => {
     setAssetToEdit(asset);
     editForm.setFieldsValue({
@@ -229,12 +231,13 @@ const InStockView = () => {
       setIsEditModalVisible(false);
       setAssetToEdit(null);
       message.success('Asset updated.');
-      fetchAssets(); // immediate!
+      window.location.reload(); // Hard page reload
     } catch {
       message.error('Update failed!');
     }
   };
 
+  // Status change: stays soft/instant reload for fast UX
   const handleMoveStatus = async (asset, newStatus) => {
     try {
       await axios.put(
@@ -247,7 +250,7 @@ const InStockView = () => {
       setIsInfoModalVisible(false);
       setModalAssetsVisible(false);
       message.success(`Moved to ${newStatus}`);
-      fetchAssets(); // immediate!
+      fetchAssets();
     } catch {
       message.error('Status update failed.');
     }
@@ -538,7 +541,7 @@ const InStockView = () => {
         )}
       </Modal>
 
-      {/* Full Info Modal with compact style */}
+      {/* Full Info Modal with compact style and larger font */}
       <Modal
         title={`Full Asset Details (${assetForInfo?.model || ''})`}
         open={isInfoModalVisible}

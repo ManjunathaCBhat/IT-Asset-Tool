@@ -197,6 +197,7 @@ const InUse = () => {
     setIsEditModalVisible(true);
   };
 
+  // CHANGED: Hard refresh after save
   const handleSaveEditView = async () => {
     try {
       const values = await editForm.validateFields();
@@ -236,7 +237,7 @@ const InUse = () => {
       setIsEditModalVisible(false);
       setSelectedAsset(null);
       editForm.resetFields();
-      fetchInUseAssets();
+      window.location.reload(); // <--- HARD RELOAD HERE
     } catch (error) {
       message.error('Failed to update asset.');
     }
@@ -275,7 +276,6 @@ const InUse = () => {
     }
   };
 
-  // Table columns
   const getSerialNumber = (i) => (pagination.current - 1) * pagination.pageSize + i + 1;
   const columns = [
     {
@@ -511,7 +511,7 @@ const InUse = () => {
         )}
       </Modal>
 
-      {/* Edit Modal: Asset Info row + Assignee row, compact */}
+      {/* Edit Modal */}
       <Modal
         title="Edit Asset"
         open={isEditModalVisible}
@@ -559,7 +559,7 @@ const InUse = () => {
         )}
       </Modal>
 
-      {/* Info Modal: Asset Info + Assignee, both small font */}
+      {/* Info Modal */}
       <Modal
         title="Asset Details"
         open={isInfoModalVisible}
