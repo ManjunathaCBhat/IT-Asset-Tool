@@ -1,16 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Table, Typography, message, Input, Space, Popconfirm, Button } from 'antd'; // Import Popconfirm and Button
-import { DeleteOutlined } from '@ant-design/icons'; // Import DeleteOutlined icon
-import moment from 'moment'; // Import moment for handling dates
+import { Table, Typography, message, Input, Space, Popconfirm, Button } from 'antd';
+import { DeleteOutlined } from '@ant-design/icons';
+import moment from 'moment';
 
 const { Title } = Typography;
 const { Search } = Input;
 
-const EWaste = () => {
+const EWaste = ({ user }) => {
     const [data, setData] = useState([]);
     const [filteredData, setFilteredData] = useState([]);
     const [searchText, setSearchText] = useState('');
+    const [pagination, setPagination] = useState({
+        current: 1,
+        pageSize: 10,
+        pageSizeOptions: ['10', '20', '50', '100'],
+        showSizeChanger: true,
+    });
 
     const getAuthHeader = () => {
         const token = localStorage.getItem('token');
@@ -24,9 +30,8 @@ const EWaste = () => {
             });
             const ewasteAssets = response.data.filter(item => item.status === 'E-Waste');
             setData(ewasteAssets);
-            setFilteredData(ewasteAssets); // initialize filtered data
+            setFilteredData(ewasteAssets);
         } catch (error) {
-            console.error('Error fetching E-Waste assets:', error);
             message.error('Failed to fetch E-Waste assets.');
         }
     };
@@ -44,41 +49,30 @@ const EWaste = () => {
             item.comment?.toLowerCase().includes(value.toLowerCase())
         );
         setFilteredData(filtered);
+        setPagination((p) => ({ ...p, current: 1 }));
     };
 
-    // --- New: Handle Delete (Move to Removed) ---
+    const handleTableChange = (pag) => {
+        setPagination({
+            ...pagination,
+            current: pag.current,
+            pageSize: pag.pageSize,
+        });
+    };
+
+    // --- Delete (Move to Removed) ---
     const handleDelete = async (record) => {
         try {
-            // API call to update the asset's status to 'Removed'
             await axios.put(`http://localhost:5000/api/equipment/${record._id}`, {
                 status: 'Removed',
-                removalDate: moment().toISOString(), // Capture the removal date
-                originalStatus: 'E-Waste', // To track where it was removed from
+                removalDate: moment().toISOString(),
+                originalStatus: 'E-Waste',
             }, {
                 headers: getAuthHeader(),
             });
-
             message.success(`Asset "${record.model}" (${record.serialNumber}) moved to Removed.`);
-
-            // Update local state to remove the item from the E-Waste list
-            const updatedData = data.filter(item => item._id !== record._id);
-            setData(updatedData);
-            setFilteredData(updatedData.filter(item =>
-                item.category?.toLowerCase().includes(searchText.toLowerCase()) ||
-                item.model?.toLowerCase().includes(searchText.toLowerCase()) ||
-                item.serialNumber?.toLowerCase().includes(searchText.toLowerCase()) ||
-                item.comment?.toLowerCase().includes(searchText.toLowerCase())
-            )); // Re-apply search filter
-
-            // You might want to navigate to the "Removed" page or just let the user click the button.
-            // If you want to auto-navigate, you'd need `useNavigate` from `react-router-dom` here.
-            // Example if you choose to navigate:
-            // import { useNavigate } from 'react-router-dom';
-            // const navigate = useNavigate();
-            // navigate('/removed');
-
+            fetchEWasteAssets();
         } catch (error) {
-            console.error('Error moving asset to Removed:', error);
             message.error('Failed to move asset to Removed. Please try again.');
         }
     };
@@ -87,7 +81,9 @@ const EWaste = () => {
         {
             title: 'Sl No',
             key: 'slno',
-            render: (_, __, index) => index + 1,
+            render: (_, __, index) => (
+                (pagination.current - 1) * pagination.pageSize + index + 1
+            ),
             width: 70,
         },
         {
@@ -110,7 +106,6 @@ const EWaste = () => {
             dataIndex: 'comment',
             key: 'comment',
         },
-        // --- New: Action Column with Delete Button ---
         {
             title: 'Action',
             key: 'action',
@@ -120,8 +115,14 @@ const EWaste = () => {
                     onConfirm={() => handleDelete(record)}
                     okText="Yes"
                     cancelText="No"
+                    disabled={user?.role === "Viewer"}
                 >
-                    <Button type="link" danger icon={<DeleteOutlined />}>
+                    <Button
+                        type="link"
+                        danger
+                        icon={<DeleteOutlined />}
+                        disabled={user?.role === "Viewer"}
+                    >
                         Remove
                     </Button>
                 </Popconfirm>
@@ -148,7 +149,12 @@ const EWaste = () => {
                 columns={columns}
                 dataSource={filteredData}
                 rowKey="_id"
-                pagination={{ pageSize: 10 }}
+                pagination={{
+                    ...pagination,
+                    total: filteredData.length,
+                    showTotal: total => `Total ${total} items`,
+                }}
+                onChange={handleTableChange}
             />
         </>
     );
