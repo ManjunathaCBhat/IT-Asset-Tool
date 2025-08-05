@@ -55,14 +55,13 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
     const location = useLocation();
 
     // Define main navigation items for the top bar
-    // Added a 'statusKey' for applying status colors
     const mainNavItems = [
         { key: '/', icon: <AppstoreOutlined />, label: 'Dashboard', statusKey: 'Dashboard' },
         { key: '/in-stock', icon: <DatabaseOutlined/>, label: 'In Stock', statusKey: 'In Stock' },
         { key: '/in-use', icon: <CheckCircleOutlined  />, label: 'In Use', statusKey: 'In Use' },
         { key: '/damaged', icon: <WarningOutlined />, label: 'Damaged', statusKey: 'Damaged' },
         { key: '/e-waste', icon: <DeleteOutlined />, label: 'E-Waste', statusKey: 'E-Waste' },
-        { key: '/removed', icon: <MinusCircleOutlined />, label: 'Removed', statusKey: 'Removed' }, // New link for Removed Assets
+        { key: '/removed', icon: <MinusCircleOutlined />, label: 'Removed', statusKey: 'Removed' },
     ];
 
     // --- Popover and Dropdown Menu Content ---
@@ -93,7 +92,6 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
             { key: 'user-info', label: <Text strong>{user?.name || user?.email}</Text>, disabled: true },
             { key: 'role', label: <Text type="secondary">Role: {user?.role}</Text>, disabled: true },
             { key: 'divider-1', type: 'divider' },
-            { key: 'settings', label: <Link to="/settings">Settings</Link>, icon: <SettingOutlined /> }, // Assuming /settings route exists
         ];
 
         if (user?.role === 'Admin') {
@@ -110,7 +108,6 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
         );
         return items;
     };
-
 
     return (
         <Layout style={{ minHeight: '100vh' }}>
@@ -183,21 +180,38 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
                     </Space>
                 </div>
 
-
-                {/* Right Section: Notifications and User Profile */}
+                {/* Right Section: Notifications and User Profile with Role */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                     <Popover content={notificationContent} title="Notifications" trigger="click" placement="bottomRight">
                         <Badge count={expiringItems.length}>
                             <BellOutlined style={{ fontSize: '20px', cursor: 'pointer' }} />
                         </Badge>
                     </Popover>
+                    
+                    {/* Avatar with Role Below */}
                     <Dropdown menu={{ items: getUserMenuItems() }} placement="bottomRight">
-                        <Avatar
-                            style={{ backgroundColor: '#1890ff', cursor: 'pointer' }}
-                            icon={user?.name ? null : <UserOutlined />}
-                        >
-                            {user?.name ? user.name.charAt(0).toUpperCase() : null}
-                        </Avatar>
+                        <div style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            alignItems: 'center', 
+                            cursor: 'pointer' 
+                        }}>
+                            <Avatar
+                               
+                                style={{ backgroundColor: '#1890ff' }}
+                                icon={user?.name ? null : <UserOutlined />}
+                            >
+                                {user?.name ? user.name.charAt(0).toUpperCase() : null}
+                            </Avatar>
+                            <Text style={{ 
+                                fontSize: '11px', 
+                                color: '#666', 
+                                marginTop: '2px',
+                                textAlign: 'center'
+                            }}>
+                                {user?.role}
+                            </Text>
+                        </div>
                     </Dropdown>
                 </div>
             </Header>

@@ -1,24 +1,30 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Card, Col, Row, Statistic, Typography, Spin, Alert, List, Text } from 'antd';
+import { Card, Col, Row, Statistic, Typography, Spin, Alert, Button, Space, List, Tag } from 'antd';
 import {
     DatabaseOutlined, CheckCircleOutlined, ToolOutlined, WarningOutlined, DeleteOutlined,
     LaptopOutlined, DesktopOutlined, AudioOutlined,
-    AimOutlined, BorderlessTableOutlined
-} from '@ant-design/icons';
+    // NEW ICONS FOR KEYBOARD AND MOUSE
+    AimOutlined, BorderlessTableOutlined // Used for Mouse and Keyboard respectively
+} from '@ant-design/icons'; // Ensure these icons are imported
 import axios from 'axios';
+import moment from 'moment';
 
-// Helper function for status colors
+const { Title, Text } = Typography;
+
+// Helper function for status colors (keep this consistent with AppLayout)
 const getStatusColor = (status) => {
     const colors = {
         'In Use': '#7ED321',
-        'In Stock': '#FA8C16',
-        'Damaged': '#D0021B',
-        'E-Waste': '#8B572A',
-        'Removed': '#555555'
+        'In Stock': '#FA8C16', // Orange
+        'Damaged': '#D0021B', // Red
+        'E-Waste': '#8B572A',  // Brown
+        'Removed': '#555555' // Dark gray for Removed status
     };
-    return colors[status] || 'rgba(0, 0, 0, 0.85)';
+    return colors[status] || 'rgba(0, 0, 0, 0.85)'; // Default text color if no specific color is found
 };
 
+
+// --- Helper function for grouping and counting by category ---
 const summarizeByCategory = (assets) => {
     const categorySummary = {};
 
@@ -37,16 +43,29 @@ const summarizeByCategory = (assets) => {
         }
 
         switch (asset.status) {
-            case 'In Use': categorySummary[category].inUse++; break;
-            case 'In Stock': categorySummary[category].inStock++; break;
-            case 'Damaged': categorySummary[category].damaged++; break;
-            case 'E-Waste': categorySummary[category].eWaste++; break;
-            case 'Removed': categorySummary[category].removed++; break;
-            default: break;
+            case 'In Use':
+                categorySummary[category].inUse++;
+                break;
+            case 'In Stock':
+                categorySummary[category].inStock++;
+                break;
+            case 'Damaged':
+                categorySummary[category].damaged++;
+                break;
+            case 'E-Waste':
+                categorySummary[category].eWaste++;
+                break;
+            case 'Removed':
+                categorySummary[category].removed++;
+                break;
+            default:
+                break;
         }
         categorySummary[category].total++;
     });
 
+    // Explicitly add desired categories to ensure they always show up, even with 0 items.
+    // ADDED 'Keyboard' to desiredCategories
     const desiredCategories = ['Laptop', 'Headset', 'Mouse', 'Monitor', 'Keyboard', 'Uncategorized'];
     desiredCategories.forEach(cat => {
         if (!categorySummary[cat]) {
@@ -65,6 +84,7 @@ const summarizeByCategory = (assets) => {
     return Object.values(categorySummary).sort((a, b) => a.category.localeCompare(b.category));
 };
 
+// Helper to get icon based on category name
 const getCategoryIcon = (category) => {
     switch (category) {
         case 'Computer':
@@ -73,15 +93,16 @@ const getCategoryIcon = (category) => {
         case 'Headset':
             return <AudioOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />;
         case 'Mouse':
-            return <AimOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />;
-        case 'Keyboard':
-            return <BorderlessTableOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />;
+            return <AimOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />; // CHANGED to AimOutlined
+        case 'Keyboard': // ADDED 'Keyboard' case
+            return <BorderlessTableOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />; // CHANGED to BorderlessTableOutlined
         case 'Monitor':
             return <DesktopOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />;
         default:
             return <DatabaseOutlined style={{ fontSize: '48px', color: '#888' }} />;
     }
 };
+
 
 const Dashboard = () => {
     const [summaryData, setSummaryData] = useState({
@@ -125,10 +146,10 @@ const Dashboard = () => {
     }, [fetchDashboardData]);
 
     return (
-        <div className="dashboard-root">
+        <div>
             {error && <Alert message="Error" description={error} type="error" showIcon style={{ marginBottom: '20px' }} />}
 
-            <Typography.Title level={3} style={{ marginBottom: '24px' }}>Dashboard Overview</Typography.Title>
+            <Title level={3} style={{ marginBottom: '24px' }}>Dashboard Overview</Title>
 
             {/* Top Row for Overall Summary Statistics */}
             <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
@@ -188,7 +209,7 @@ const Dashboard = () => {
                 </Col>
             </Row>
 
-            <Typography.Title level={4} style={{ marginBottom: '24px', marginTop: '32px' }}>Assets by Category</Typography.Title>
+            <Title level={4} style={{ marginBottom: '24px', marginTop: '32px' }}>Assets by Category</Title>
 
             {loading ? (
                 <div style={{ textAlign: 'center', padding: '50px' }}>
@@ -208,9 +229,9 @@ const Dashboard = () => {
                             <Card
                                 title={
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <Typography.Text strong style={{ fontSize: '16px' }}>
+                                        <Text strong style={{ fontSize: '16px' }}>
                                             {categoryData.category} ({categoryData.total})
-                                        </Typography.Text>
+                                        </Text>
                                     </div>
                                 }
                                 hoverable
@@ -233,10 +254,10 @@ const Dashboard = () => {
                                         renderItem={item => (
                                             <List.Item style={{ padding: '4px 0', borderBottom: 'none' }}>
                                                 <List.Item.Meta
-                                                    title={<Typography.Text style={{ color: item.color, fontSize: '12px' }}>{item.label}</Typography.Text>}
+                                                    title={<Text style={{ color: item.color, fontSize: '12px' }}>{item.label}</Text>}
                                                 />
                                                 <div>
-                                                    <Typography.Text style={{ fontWeight: 'bold', fontSize: '12px', color: item.color }}>{item.count}</Typography.Text>
+                                                    <Text style={{ fontWeight: 'bold', fontSize: '12px', color: item.color }}>{item.count}</Text>
                                                 </div>
                                             </List.Item>
                                         )}

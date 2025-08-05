@@ -123,13 +123,9 @@ const AddEquipment = () => {
                                     <Form.Item
                                         name="purchasePrice"
                                         label="Purchase Price (INR)"
-                                        rules={[
-                                            { type: 'number', transform: (value) => parseFloat(value), message: 'Price must be a number!' },
-                                            { min: 0, message: 'Price cannot be negative!' }
-                                        ]}
                                         style={{ marginBottom: 12 }}
                                     >
-                                        <Input type="number" step="0.01" placeholder="e.g., 25000.00" className="hide-number-arrows" />
+                                        <Input type="number"  placeholder="e.g., 25000.00" className="hide-number-arrows" />
                                     </Form.Item>
                                 </Col>
                                 <Col span={12}>

@@ -396,41 +396,6 @@ app.get('/api/equipment', auth, async (req, res) => {
     }
 });
 
-// routes/users.js or similar
-// Make sure you have: const User = require('path/to/user/model');
-app.delete('/api/users/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    // Optional: ID validation (must be 24 hex chars for MongoDB)
-    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({ msg: 'Invalid user ID' });
-    }
-    const user = await User.findByIdAndDelete(id);
-    if (!user) return res.status(404).json({ msg: 'User not found' });
-    res.json({ msg: 'User deleted.' });
-  } catch (err) {
-    console.error('Delete user error', err); // Check your server log!
-    res.status(500).json({ msg: 'Server error while deleting user.' });
-  }
-});
-
-
-
-
-// Example Express route
-app.put('/api/users/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { role } = req.body;
-        // This assumes you use Mongoose and 'User' model
-        const updated = await User.findByIdAndUpdate(id, { role }, { new: true });
-        if (!updated) return res.status(404).json({ msg: 'User not found' });
-        res.json(updated);
-    } catch (err) {
-        res.status(500).json({ msg: 'Server error' });
-    }
-});
-
 // @route POST /api/equipment
 // @desc Add new equipment
 // @access Private (Admin, Editor)
