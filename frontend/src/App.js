@@ -8,7 +8,6 @@ import axios from 'axios';
 import AppLayout from './AppLayout';
 import LoginPage, { AuthProvider, RoleBanner, useAuth } from './LoginPage';
 import Dashboard from './Dashboard';
-import MasterView from './MasterView';
 import AddEquipment from './AddEquipment';
 import UserManagement from './UserManagement';
 import InStockView from './InStockView';
@@ -142,9 +141,10 @@ const AppContent = () => {
                     >
                         {/* Dashboard is now the default child route for authenticated users */}
                         <Route index element={<Dashboard />} />
+
                         
                         {/* All users can view these pages */}
-                        <Route path="all-assets" element={<MasterView user={user} />} />
+
                         <Route path="in-stock" element={<InStockView user={user} />} />
                         <Route path="in-use" element={<InUse user={user} />} />
                         <Route path="damaged" element={<DamagedProducts user={user} />} />

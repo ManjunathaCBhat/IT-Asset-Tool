@@ -11,6 +11,12 @@ const EWaste = () => {
     const [data, setData] = useState([]);
     const [filteredData, setFilteredData] = useState([]);
     const [searchText, setSearchText] = useState('');
+    const [pagination, setPagination] = useState({
+        current: 1,
+        pageSize: 10,
+        pageSizeOptions: ['10', '20', '50', '100'],
+        showSizeChanger: true,
+    });
 
     const getAuthHeader = () => {
         const token = localStorage.getItem('token');
@@ -24,7 +30,7 @@ const EWaste = () => {
             });
             const ewasteAssets = response.data.filter(item => item.status === 'E-Waste');
             setData(ewasteAssets);
-            setFilteredData(ewasteAssets); // initialize filtered data
+            setFilteredData(ewasteAssets);
         } catch (error) {
             console.error('Error fetching E-Waste assets:', error);
             message.error('Failed to fetch E-Waste assets.');
@@ -44,16 +50,23 @@ const EWaste = () => {
             item.comment?.toLowerCase().includes(value.toLowerCase())
         );
         setFilteredData(filtered);
+        setPagination(p => ({ ...p, current: 1 }));
     };
 
-    // --- New: Handle Delete (Move to Removed) ---
+    const handleTableChange = (pag) => {
+        setPagination({
+            ...pagination,
+            current: pag.current,
+            pageSize: pag.pageSize,
+        });
+    };
+
     const handleDelete = async (record) => {
         try {
-            // API call to update the asset's status to 'Removed'
             await axios.put(`http://localhost:5000/api/equipment/${record._id}`, {
                 status: 'Removed',
-                removalDate: moment().toISOString(), // Capture the removal date
-                originalStatus: 'E-Waste', // To track where it was removed from
+                removalDate: moment().toISOString(),
+                originalStatus: 'E-Waste',
             }, {
                 headers: getAuthHeader(),
             });
@@ -70,6 +83,10 @@ const EWaste = () => {
                 item.comment?.toLowerCase().includes(searchText.toLowerCase())
             )); // Re-apply search filter
 
+            // Full reload (hard refresh), or remove manually from filteredData for a soft update:
+            // window.location.reload(); // If you want a HARD refresh
+            // Soft update (recommended for UX):
+            fetchEWasteAssets();
         } catch (error) {
             console.error('Error moving asset to Removed:', error);
             message.error('Failed to move asset to Removed. Please try again.');
@@ -80,7 +97,9 @@ const EWaste = () => {
         {
             title: 'Sl No',
             key: 'slno',
-            render: (_, __, index) => index + 1,
+            render: (_, __, index) => (
+                (pagination.current - 1) * pagination.pageSize + index + 1
+            ),
             width: 70,
         },
         {
@@ -103,7 +122,6 @@ const EWaste = () => {
             dataIndex: 'comment',
             key: 'comment',
         },
-        // --- New: Action Column with Delete Button ---
         {
             title: 'Action',
             key: 'action',
@@ -141,7 +159,12 @@ const EWaste = () => {
                 columns={columns}
                 dataSource={filteredData}
                 rowKey="_id"
-                pagination={{ pageSize: 10 }}
+                pagination={{
+                    ...pagination,
+                    total: filteredData.length,
+                    showTotal: total => `Total ${total} items`,
+                }}
+                onChange={handleTableChange}
             />
         </>
     );
