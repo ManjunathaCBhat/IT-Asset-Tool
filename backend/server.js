@@ -4,8 +4,12 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto'); // Add this for generating reset tokens
 require('dotenv').config();
 const moment = require('moment'); // Import moment for date calculations
+
+// Add SendGrid import
+const sgMail = require('@sendgrid/mail');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -19,14 +23,67 @@ const MONGO_URI = process.env.MONGO_URI;
 // --- JWT Secret ---
 const JWT_SECRET = process.env.JWT_SECRET;
 
+// --- SendGrid Setup ---
+// Initialize SendGrid with error checking
+if (!process.env.SENDGRID_API_KEY) {
+    console.error('SENDGRID_API_KEY not found in environment variables');
+} else if (!process.env.SENDGRID_API_KEY.startsWith('SG.')) {
+    console.error('SENDGRID_API_KEY does not start with "SG."');
+} else {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    console.log('SendGrid initialized successfully');
+}
+
+// --- SendGrid Email Function ---
+const sendResetEmail = async (email, resetToken) => {
+    const msg = {
+        to: email,
+        from: {
+            email: process.env.SENDGRID_FROM_EMAIL,
+            name: 'IT Asset Management'
+        },
+        subject: 'Password Reset Request - IT Asset Management',
+        text: `Your password reset token is: ${resetToken}\n\nThis token expires in 1 hour.`,
+        html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #2C4B84;">Password Reset Request</h2>
+                <p>You requested a password reset for your IT Asset Management account.</p>
+                <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                    <p style="margin: 0;"><strong>Your reset token:</strong></p>
+                    <p style="font-size: 18px; font-weight: bold; color: #296bd5; margin: 10px 0; font-family: monospace;">${resetToken}</p>
+                </div>
+                <p><strong>This token expires in 1 hour.</strong></p>
+                <p>If you didn't request this, please ignore this email.</p>
+            </div>
+        `
+    };
+
+    try {
+        console.log('Attempting to send email to:', email);
+        console.log('From email:', process.env.SENDGRID_FROM_EMAIL);
+        
+        const result = await sgMail.send(msg);
+        console.log('Email sent successfully:', result[0].statusCode);
+        return { success: true };
+    } catch (error) {
+        console.error('SendGrid Error Details:');
+        console.error('Error message:', error.message);
+        if (error.response) {
+            console.error('Status code:', error.response.status);
+            console.error('Response body:', JSON.stringify(error.response.body, null, 2));
+        }
+        return { success: false, error: error.message };
+    }
+};
+
 // --- Mongoose Schemas ---
 const UserSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     role: { type: String, enum: ['Admin', 'Editor', 'Viewer'], default: 'Viewer' },
-    // Add these fields if you implement password reset token generation
-    // resetPasswordToken: String,
-    // resetPasswordExpires: Date
+    // UNCOMMENTED these fields for password reset functionality
+    resetPasswordToken: String,
+    resetPasswordExpires: Date
 });
 
 const EquipmentSchema = new mongoose.Schema({
@@ -88,7 +145,6 @@ mongoose.connect(MONGO_URI)
     })
     .catch(err => console.error('MongoDB connection error:', err));
 
-
 // --- Authentication & Role Middleware ---
 const auth = (req, res, next) => {
     const token = req.header('x-auth-token');
@@ -116,7 +172,29 @@ const requireRole = (roles) => (req, res, next) => {
 
 // --- API Endpoints ---
 
-// --- User Endpoints (Keep these together) ---
+// --- Test SendGrid Endpoint (for debugging) ---
+app.get('/test-sendgrid', async (req, res) => {
+    try {
+        const msg = {
+            to: 'your-test-email@domain.com', // Replace with your actual email
+            from: process.env.SENDGRID_FROM_EMAIL,
+            subject: 'SendGrid Test',
+            text: 'Testing SendGrid connection from server'
+        };
+        
+        console.log('Testing SendGrid with:');
+        console.log('To:', msg.to);
+        console.log('From:', msg.from);
+        
+        await sgMail.send(msg);
+        res.json({ success: true, message: 'Test email sent successfully!' });
+    } catch (error) {
+        console.error('Test email failed:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// --- User Endpoints ---
 app.post('/api/users/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -129,14 +207,106 @@ app.post('/api/users/login', async (req, res) => {
             if (err) throw err;
             res.json({ token, user: payload.user });
         });
-    } catch (err) { console.error(err.message); res.status(500).send('Server error'); }
+    } catch (err) { 
+        console.error(err.message); 
+        res.status(500).send('Server error'); 
+    }
+});
+
+// --- FORGOT PASSWORD ENDPOINT (NEW) ---
+app.post('/api/forgot-password', async (req, res) => {
+    const { email } = req.body;
+    console.log('Password reset requested for:', email);
+
+    try {
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'No account found with that email address.' 
+            });
+        }
+
+        // Generate reset token
+        const resetToken = crypto.randomBytes(20).toString('hex');
+
+        // Save token to database
+        user.resetPasswordToken = resetToken;
+        user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+        await user.save();
+
+        // Send email
+        const emailResult = await sendResetEmail(email, resetToken);
+        
+        if (emailResult.success) {
+            res.json({ 
+                success: true, 
+                message: 'Password reset email sent successfully.' 
+            });
+        } else {
+            res.status(500).json({ 
+                success: false, 
+                message: 'Failed to send reset email. Please try again later.' 
+            });
+        }
+
+    } catch (err) {
+        console.error('Forgot password error:', err);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Server error occurred.' 
+        });
+    }
+});
+
+// --- RESET PASSWORD ENDPOINT (UPDATED) ---
+app.post('/api/reset-password', async (req, res) => {
+    console.log('Reset password request body:', req.body);
+    const { email, token, newPassword } = req.body;
+    try {
+        const user = await User.findOne({
+            email,
+            resetPasswordToken: token,
+            resetPasswordExpires: { $gt: Date.now() } // Token not expired
+        });
+
+        if (!user) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Password reset token is invalid or has expired.' 
+            });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+
+        // Clear reset token fields
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpires = undefined;
+
+        await user.save();
+
+        res.json({ 
+            success: true, 
+            message: 'Password has been reset successfully.' 
+        });
+    } catch (err) {
+        console.error('Reset password error:', err.message);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to reset password.' 
+        });
+    }
 });
 
 app.get('/api/users', [auth, requireRole(['Admin'])], async (req, res) => {
     try {
         const users = await User.find().select('-password');
         res.json(users);
-    } catch (err) { console.error(err.message); res.status(500).send('Server Error'); }
+    } catch (err) { 
+        console.error(err.message); 
+        res.status(500).send('Server Error'); 
+    }
 });
 
 app.post('/api/users/create', [auth, requireRole(['Admin'])], async (req, res) => {
@@ -149,36 +319,30 @@ app.post('/api/users/create', [auth, requireRole(['Admin'])], async (req, res) =
         user.password = await bcrypt.hash(password, salt);
         await user.save();
         res.json({ msg: 'User created successfully' });
-    } catch (err) { console.error(err.message); res.status(500).send('Server Error'); }
+    } catch (err) { 
+        console.error(err.message); 
+        res.status(500).send('Server Error'); 
+    }
 });
 
-app.post('/api/reset-password', async (req, res) => {
-    console.log('Reset password request body:', req.body);
-    const { email, token, newPassword } = req.body;
+// --- UPDATE USER ROLE ENDPOINT (ADDED) ---
+app.put('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) => {
     try {
-        const user = await User.findOne({
-            email,
-            resetPasswordToken: token,
-            resetPasswordExpires: { $gt: Date.now() } // Token not expired
-        });
-
-        if (!user) {
-            return res.status(400).json({ message: 'Invalid or expired token.' });
+        const { role } = req.body;
+        const updatedUser = await User.findByIdAndUpdate(
+            req.params.id,
+            { role },
+            { new: true }
+        ).select('-password');
+        
+        if (!updatedUser) {
+            return res.status(404).json({ msg: 'User not found' });
         }
-
-        const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(newPassword, salt);
-
-        // Clear reset token fields
-        user.resetPasswordToken = undefined;
-        user.resetPasswordExpires = undefined;
-
-        await user.save();
-
-        res.json({ message: 'Password has been reset successfully.' });
-    } catch (err) {
-        console.error('Reset password error:', err.message);
-        res.status(500).json({ message: 'Failed to reset password.' });
+        
+        res.json({ msg: 'User updated successfully', user: updatedUser });
+    } catch (err) { 
+        console.error(err.message); 
+        res.status(500).send('Server Error'); 
     }
 });
 
@@ -192,14 +356,13 @@ app.delete('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) =>
             return res.status(404).json({ msg: 'User not found' });
         }
         res.json({ msg: 'User deleted' });
-    } catch (err) { console.error(err.message); res.status(500).send('Server Error'); }
+    } catch (err) { 
+        console.error(err.message); 
+        res.status(500).send('Server Error'); 
+    }
 });
 
-
 // --- Equipment Endpoints (REORDERED FOR SPECIFICITY) ---
-// ORDER: Most specific dashboard-related endpoints first, then general gets, then CUD.
-// This prevents broader routes from "eating" requests meant for more specific ones.
-
 
 // 1. Dashboard Specific Summary Endpoints
 // @route   GET /api/equipment/summary
@@ -213,7 +376,6 @@ app.get('/api/equipment/summary', auth, async (req, res) => {
         const damaged = await Equipment.countDocuments({ status: 'Damaged', isDeleted: { $ne: true } });
         const eWaste = await Equipment.countDocuments({ status: 'E-Waste', isDeleted: { $ne: true } });
 
-        // FIX: Declare 'removed' before using it in res.json
         const removed = await Equipment.countDocuments({
             $or: [
                 { status: 'E-Waste' },
@@ -229,7 +391,7 @@ app.get('/api/equipment/summary', auth, async (req, res) => {
             inStock,
             damaged,
             eWaste,
-            removed, // Ensure 'removed' is included in the response
+            removed,
         });
     } catch (err) {
         console.error('Error in /api/equipment/summary:', err.message);
@@ -270,7 +432,7 @@ app.get('/api/equipment/expiring-warranty', auth, async (req, res) => {
 
         const expiringItems = await Equipment.find({
             warrantyInfo: { $exists: true, $ne: null, $type: 9, $gte: now, $lte: thirtyDaysFromNow },
-            status: { $nin: ['E-Waste', 'Damaged', 'Removed'] }, // Exclude 'Removed' status too
+            status: { $nin: ['E-Waste', 'Damaged', 'Removed'] },
             isDeleted: { $ne: true }
         }).select('model serialNumber warrantyInfo');
 
@@ -285,89 +447,83 @@ app.get('/api/equipment/expiring-warranty', auth, async (req, res) => {
 // @desc    Get assets grouped by employee email
 // @access  Private
 app.get('/api/equipment/grouped-by-email', auth, async (req, res) => {
-  try {
-    const groupedData = await Equipment.aggregate([
-      { $match: { status: "In Use", isDeleted: { $ne: true } } },
-      {
-        $group: {
-          _id: "$employeeEmail",
-          assigneeName: { $first: "$assigneeName" },
-          position: { $first: "$position" },
-          phoneNumber: { $first: "$phoneNumber" },
-          department: { $first: "$department" },
-          assets: {
-              $push: {
-                  _id: "$_id",
-                  assetId: "$assetId",
-                  category: "$category",
-                  status: "$status",
-                  model: "$model",
-                  serialNumber: "$serialNumber",
-                  warrantyInfo: "$warrantyInfo",
-                  location: "$location",
-                  comment: "$comment",
-                  damageDescription: "$damageDescription",
-                  purchasePrice: "$purchasePrice",
-                  createdAt: "$createdAt",
-                  updatedAt: "$updatedAt"
-              }
-          },
-          count: { $sum: 1 }
-        }
-      },
-      {
-        $project: {
-            _id: 0,
-            employeeEmail: "$_id",
-            assigneeName: 1,
-            position: 1,
-            phoneNumber: 1,
-            department: 1,
-            assets: 1,
-            count: 1
-        }
-      },
-      {
-        $sort: { employeeEmail: 1 }
-      }
-    ]);
-    res.json(groupedData);
-  } catch (error) {
-    console.error("Error in grouped-by-email aggregation:", error);
-    res.status(500).json({ message: "Server error" });
-  }
+    try {
+        const groupedData = await Equipment.aggregate([
+            { $match: { status: "In Use", isDeleted: { $ne: true } } },
+            {
+                $group: {
+                    _id: "$employeeEmail",
+                    assigneeName: { $first: "$assigneeName" },
+                    position: { $first: "$position" },
+                    phoneNumber: { $first: "$phoneNumber" },
+                    department: { $first: "$department" },
+                    assets: {
+                        $push: {
+                            _id: "$_id",
+                            assetId: "$assetId",
+                            category: "$category",
+                            status: "$status",
+                            model: "$model",
+                            serialNumber: "$serialNumber",
+                            warrantyInfo: "$warrantyInfo",
+                            location: "$location",
+                            comment: "$comment",
+                            damageDescription: "$damageDescription",
+                            purchasePrice: "$purchasePrice",
+                            createdAt: "$createdAt",
+                            updatedAt: "$updatedAt"
+                        }
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    employeeEmail: "$_id",
+                    assigneeName: 1,
+                    position: 1,
+                    phoneNumber: 1,
+                    department: 1,
+                    assets: 1,
+                    count: 1
+                }
+            },
+            {
+                $sort: { employeeEmail: 1 }
+            }
+        ]);
+        res.json(groupedData);
+    } catch (error) {
+        console.error("Error in grouped-by-email aggregation:", error);
+        res.status(500).json({ message: "Server error" });
+    }
 });
-
 
 // @route   GET /api/equipment/removed
 // @desc    Get all assets that have been marked as removed/e-waste/damaged
-// @access  Private (e.g., Admin/Editor role, potentially Viewer too for history)
+// @access  Private
 app.get('/api/equipment/removed', auth, async (req, res) => {
-  try {
-    // Assets are considered "removed" if their status is 'E-Waste' or 'Damaged',
-    // or if they have an 'isDeleted: true' flag.
-    const removedAssets = await Equipment.find({
-      $or: [
-        { status: 'E-Waste' },
-        { status: 'Damaged' },
-        { status: 'Removed' }, // Include the new 'Removed' status here
-        { isDeleted: true }
-      ]
-    })
-    .sort({ updatedAt: -1 });
+    try {
+        const removedAssets = await Equipment.find({
+            $or: [
+                { status: 'E-Waste' },
+                { status: 'Damaged' },
+                { status: 'Removed' },
+                { isDeleted: true }
+            ]
+        })
+        .sort({ updatedAt: -1 });
 
-    res.json(removedAssets);
-
-  } catch (err) {
-    console.error('Error in /api/equipment/removed:', err.message);
-    res.status(500).send('Server Error: Could not fetch removed assets.');
-  }
+        res.json(removedAssets);
+    } catch (err) {
+        console.error('Error in /api/equipment/removed:', err.message);
+        res.status(500).send('Server Error: Could not fetch removed assets.');
+    }
 });
 
-
-// 2. Specific Dynamic Route (should come before the general /api/equipment)
 // @route GET /api/equipment/count/:category
-// @desc Get equipment count by category (excluding soft-deleted) - This route is specific
+// @desc Get equipment count by category (excluding soft-deleted)
 // @access Private
 app.get('/api/equipment/count/:category', auth, async (req, res) => {
     try {
@@ -382,7 +538,6 @@ app.get('/api/equipment/count/:category', auth, async (req, res) => {
     }
 });
 
-// 3. General Equipment Routes (More general, placed after specific ones)
 // @route GET /api/equipment
 // @desc GET all equipment (that is NOT soft-deleted)
 // @access Private
@@ -400,7 +555,6 @@ app.get('/api/equipment', auth, async (req, res) => {
 // @desc Add new equipment
 // @access Private (Admin, Editor)
 app.post('/api/equipment', [auth, requireRole(['Admin', 'Editor'])], async (req, res) => {
-    // Basic validation before creating Equipment instance
     const { assetId, category, status, model, serialNumber, warrantyInfo, location, comment,
             assigneeName, position, employeeEmail, phoneNumber, department, damageDescription, purchasePrice } = req.body;
 
@@ -411,14 +565,11 @@ app.post('/api/equipment', [auth, requireRole(['Admin', 'Editor'])], async (req,
         if (mWarranty.isValid()) {
             parsedWarrantyInfo = mWarranty.toDate();
         } else {
-            // Handle invalid date string gracefully, maybe send a warning or 400
             console.warn(`POST request: Invalid warrantyInfo date string received: ${warrantyInfo}`);
-            // You might want to return an error here: return res.status(400).json({ msg: 'Invalid warrantyInfo date format' });
         }
     }
 
     let parsedPurchaseDate = null;
-    // Assuming purchaseDate might also come in the payload and needs parsing
     if (req.body.purchaseDate) {
         const mPurchaseDate = moment(req.body.purchaseDate);
         if (mPurchaseDate.isValid()) {
@@ -428,13 +579,12 @@ app.post('/api/equipment', [auth, requireRole(['Admin', 'Editor'])], async (req,
         }
     }
 
-
     const newEquipment = new Equipment({
         assetId, category, status, model, serialNumber,
-        warrantyInfo: parsedWarrantyInfo, // Use parsed Date object
+        warrantyInfo: parsedWarrantyInfo,
         location, comment, assigneeName, position,
         employeeEmail, phoneNumber, department, damageDescription, purchasePrice,
-        purchaseDate: parsedPurchaseDate // Add purchaseDate to schema and here
+        purchaseDate: parsedPurchaseDate
     });
 
     try {
@@ -445,7 +595,7 @@ app.post('/api/equipment', [auth, requireRole(['Admin', 'Editor'])], async (req,
             const messages = Object.values(err.errors).map(val => val.message);
             return res.status(400).json({ message: messages.join('. ') });
         }
-        if (err.code === 11000) { // Duplicate key error (e.g., assetId)
+        if (err.code === 11000) {
             return res.status(400).json({ message: 'Duplicate asset ID. An asset with this ID already exists.' });
         }
         console.error('Error in /api/equipment (POST):', err);
@@ -457,7 +607,6 @@ app.post('/api/equipment', [auth, requireRole(['Admin', 'Editor'])], async (req,
 // @desc Update existing equipment
 // @access Private (Admin, Editor)
 app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (req, res) => {
-    // Clone req.body to safely modify date fields for Mongoose
     const updateData = { ...req.body };
 
     // Handle incoming date strings for warrantyInfo and purchaseDate
@@ -466,12 +615,10 @@ app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (r
         if (mWarranty.isValid()) {
             updateData.warrantyInfo = mWarranty.toDate();
         } else {
-            // If invalid date string is sent, set to null or remove the field
-            updateData.warrantyInfo = null; // Or undefined to let it default
+            updateData.warrantyInfo = null;
             console.warn(`PUT request for ${req.params.id}: Invalid warrantyInfo date string received: ${req.body.warrantyInfo}`);
         }
     } else {
-        // If warrantyInfo is explicitly null/empty in payload, set it to null in DB
         updateData.warrantyInfo = null;
     }
 
@@ -489,19 +636,18 @@ app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (r
 
     // Ensure damageDescription is cleared if status changes from Damaged
     if (req.body.status !== 'Damaged') {
-        updateData.damageDescription = null; // Or undefined
+        updateData.damageDescription = null;
     }
 
-    // Ensure comment is properly handled (if it comes as "null" string, convert to null)
+    // Ensure comment is properly handled
     if (updateData.comment === "null") {
         updateData.comment = null;
     }
 
     try {
-        // Validate the update payload before applying
         const updatedEquipment = await Equipment.findByIdAndUpdate(
             req.params.id,
-            updateData, // Use the processed updateData
+            updateData,
             { new: true, runValidators: true }
         );
 
@@ -512,10 +658,10 @@ app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (r
             const messages = Object.values(err.errors).map(val => val.message);
             return res.status(400).json({ message: messages.join('. ') });
         }
-        if (err.code === 11000) { // Duplicate key error (e.g., assetId)
+        if (err.code === 11000) {
             return res.status(400).json({ message: 'Duplicate asset ID. An asset with this ID already exists.' });
         }
-        console.error('Error in /api/equipment/:id (PUT):', err.message, err); // Log full error object
+        console.error('Error in /api/equipment/:id (PUT):', err.message, err);
         res.status(500).json({ message: 'Server error during equipment update.' });
     }
 });
@@ -527,8 +673,8 @@ app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res
     try {
         const softDeletedEquipment = await Equipment.findByIdAndUpdate(
             req.params.id,
-            { isDeleted: true }, // Set isDeleted to true
-            { new: true } // Return the updated document
+            { isDeleted: true },
+            { new: true }
         );
         if (!softDeletedEquipment) {
             return res.status(404).json({ message: 'Equipment not found' });
@@ -539,7 +685,6 @@ app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res
         res.status(500).json({ message: err.message });
     }
 });
-
 
 // --- Server Start ---
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

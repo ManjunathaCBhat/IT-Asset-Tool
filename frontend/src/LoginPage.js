@@ -3,22 +3,34 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { message } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
+import { EyeOutlined, EyeInvisibleOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 
 const LoginPage = ({ onLogin }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const [forgotEmailSent, setForgotEmailSent] = useState(false);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [signInButtonHovered, setSignInButtonHovered] = useState(false);
     const [forgotButtonHovered, setForgotButtonHovered] = useState(false);
 
+    // Forgot Password States
+    const [showForgotModal, setShowForgotModal] = useState(false);
+    const [forgotStep, setForgotStep] = useState(1); // 1: Enter email, 2: Enter new passwords
+    const [forgotEmail, setForgotEmail] = useState('');
+    const [resetToken, setResetToken] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [forgotLoading, setForgotLoading] = useState(false);
+    const [forgotError, setForgotError] = useState('');
+
     const canvasRef = useRef(null);
     const mouse = useRef({ x: null, y: null, radius: 150 });
     const navigate = useNavigate();
 
+    // Canvas animation code (keeping your existing animation)
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -153,45 +165,6 @@ const LoginPage = ({ onLogin }) => {
         };
     }, []);
 
-
-     const handleForgotPassword = async () => {
-        if (!email) {
-            message.warning("Please enter your email address.");
-            return;
-        }
-
-        const emailRegex = /\S+@\S+\.\S+/;
-        if (!emailRegex.test(email)) {
-            message.warning("Please enter a valid email address.");
-            return;
-        }
-
-        try {
-            const response = await fetch("http://localhost:5000/api/forgot-password", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ email })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                setForgotEmailSent(true);
-                message.success("Reset email sent. Check your inbox.");
-                setTimeout(() => setForgotEmailSent(false), 5000);
-            } else {
-                setForgotEmailSent(false);
-                message.error(data.message || "Failed to send reset email.");
-            }
-        } catch (error) {
-            console.error("Error:", error);
-            setForgotEmailSent(false);
-            message.error("Something went wrong. Please try again later.");
-        }
-    };
-
     const handleLogin = async (e) => {
         e.preventDefault();
         setIsLoading(true);
@@ -209,15 +182,113 @@ const LoginPage = ({ onLogin }) => {
         }
     };
 
+    // Forgot Password Functions
+    const handleForgotPasswordClick = () => {
+        setShowForgotModal(true);
+        setForgotStep(1);
+        setForgotEmail('');
+        setResetToken('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setForgotError('');
+    };
+
+    const closeForgotModal = () => {
+        setShowForgotModal(false);
+        setForgotStep(1);
+        setForgotEmail('');
+        setResetToken('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setForgotError('');
+    };
+
+    const handleRequestReset = async (e) => {
+        e.preventDefault();
+        setForgotLoading(true);
+        setForgotError('');
+
+        if (!forgotEmail) {
+            setForgotError('Please enter your email address.');
+            setForgotLoading(false);
+            return;
+        }
+
+        const emailRegex = /\S+@\S+\.\S+/;
+        if (!emailRegex.test(forgotEmail)) {
+            setForgotError('Please enter a valid email address.');
+            setForgotLoading(false);
+            return;
+        }
+
+        try {
+            const response = await axios.post('http://localhost:5000/api/forgot-password', {
+                email: forgotEmail
+            });
+
+            if (response.data.success) {
+                message.success('Reset token sent to your email. Please check your inbox.');
+                setForgotStep(2);
+            }
+        } catch (err) {
+            const errorMessage = err.response?.data?.message || 'Failed to send reset email. Please try again.';
+            setForgotError(errorMessage);
+        } finally {
+            setForgotLoading(false);
+        }
+    };
+
+    const handleResetPassword = async (e) => {
+        e.preventDefault();
+        setForgotLoading(true);
+        setForgotError('');
+
+        // Validation
+        if (!resetToken || !newPassword || !confirmPassword) {
+            setForgotError('Please fill in all fields.');
+            setForgotLoading(false);
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            setForgotError('Passwords do not match.');
+            setForgotLoading(false);
+            return;
+        }
+
+        if (newPassword.length < 6) {
+            setForgotError('Password must be at least 6 characters long.');
+            setForgotLoading(false);
+            return;
+        }
+
+        try {
+            const response = await axios.post('http://localhost:5000/api/reset-password', {
+                email: forgotEmail,
+                token: resetToken,
+                newPassword: newPassword
+            });
+
+            if (response.data.success) {
+                message.success('Password reset successfully! You can now login with your new password.');
+                closeForgotModal();
+            }
+        } catch (err) {
+            const errorMessage = err.response?.data?.message || 'Failed to reset password. Please check your token and try again.';
+            setForgotError(errorMessage);
+        } finally {
+            setForgotLoading(false);
+        }
+    };
+
     // --- STYLES ---
-    // Common input style for both email and password for consistent sizing and appearance
     const commonInputStyle = {
-        padding: '10px 15px', // Increased horizontal padding
+        padding: '10px 15px',
         width: '100%',
-        height: '40px', // Fixed height for consistency
+        height: '40px',
         borderRadius: '4px',
-        border: '1px solid #D5D5D5', // Consistent border
-        boxSizing: 'border-box', // Crucial for consistent width with padding
+        border: '1px solid #D5D5D5',
+        boxSizing: 'border-box',
         fontSize: '14px',
         color: '#000929',
     };
@@ -251,45 +322,41 @@ const LoginPage = ({ onLogin }) => {
     const rightPanelStyle = { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#F1F1F1', position: 'relative' };
     const formContainerStyle = { backgroundColor: '#FFFFFF', padding: '2.5rem', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)', width: '100%', maxWidth: '400px', textAlign: 'center' };
     const headingStyle = { color: '#2C4B84', fontSize: '18px', fontWeight: '700', marginBottom: '2rem' };
-    // Adjusted labelStyle for more space between label and input
-    const labelStyle = { display: 'block', textAlign: 'left', color: '#6C727F', fontSize: '12px', fontWeight: '500', marginBottom: '0.4rem' }; // Reduced margin-bottom slightly (4px)
+    const labelStyle = { display: 'block', textAlign: 'left', color: '#6C727F', fontSize: '12px', fontWeight: '500', marginBottom: '0.4rem' };
 
-    // Style for the main Login button, with hover effect
-    const signInButtonStyle = { // Renamed to signInButtonStyle but used for 'Login' text
+    const signInButtonStyle = {
         width: '100%',
         padding: '12px',
         border: 'none',
         borderRadius: '8px',
-        backgroundColor: signInButtonHovered ? '#1d54b8' : '#296bd5ff', // Darker blue on hover
+        backgroundColor: signInButtonHovered ? '#1d54b8' : '#296bd5ff',
         color: 'white',
         fontSize: '14px',
         fontWeight: '700',
         cursor: 'pointer',
-        marginTop: '0.5rem', // Space from password input
-        transition: 'background-color 0.3s ease', // Smooth transition for hover
+        marginTop: '0.5rem',
+        transition: 'background-color 0.3s ease',
     };
 
-    // Style for the Forgot Password button, with hover effect
     const forgotPasswordButtonStyle = {
         background: 'none',
-        color: forgotButtonHovered ? '#1d54b8' : '#296bd5ff', // Darker blue on hover
+        color: forgotButtonHovered ? '#1d54b8' : '#296bd5ff',
         border: 'none',
         cursor: 'pointer',
-        marginTop: '1rem', // Space from login button
+        marginTop: '1rem',
         fontSize: '13px',
         textAlign: 'center',
         display: 'block',
         width: '100%',
-        transition: 'color 0.3s ease', // Smooth transition for hover
+        transition: 'color 0.3s ease',
     };
 
     const errorStyle = { color: '#D5292B', fontSize: '12px', marginTop: '0.8rem', height: '14px', textAlign: 'center' };
     const subtitleStyle = { color: '#FFFFFF', opacity: 0.8, fontSize: '14px', fontWeight: '500', marginTop: '4px' };
-    // Password eye icon style with precise top adjustment
     const passwordToggleIconStyle = {
         position: 'absolute',
-        right: '15px', // Distance from the right edge
-        top: '67%',    // Precisely adjusted top (relative to input container)
+        right: '15px',
+        top: '67%',
         transform: 'translateY(-50%)',
         cursor: 'pointer',
         color: '#6C727F',
@@ -297,10 +364,56 @@ const LoginPage = ({ onLogin }) => {
         zIndex: 2,
     };
     const inputContainerStyle = {
-        marginBottom: '1.2rem', // Consistent margin bottom for form rows
-        position: 'relative', // Necessary for absolute positioning of the icon
+        marginBottom: '1.2rem',
+        position: 'relative',
     };
 
+    // Modal Styles
+    const modalOverlayStyle = {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+    };
+
+    const modalContentStyle = {
+        backgroundColor: '#FFFFFF',
+        padding: '2rem',
+        borderRadius: '16px',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+        width: '90%',
+        maxWidth: '400px',
+        textAlign: 'center',
+        position: 'relative',
+    };
+
+    const backButtonStyle = {
+        position: 'absolute',
+        top: '20px',
+        left: '20px',
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        fontSize: '18px',
+        color: '#296bd5ff',
+    };
+
+    const closeButtonStyle = {
+        position: 'absolute',
+        top: '15px',
+        right: '20px',
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        fontSize: '20px',
+        color: '#666',
+    };
 
     return (
         <div style={pageStyle}>
@@ -321,7 +434,6 @@ const LoginPage = ({ onLogin }) => {
                 <div style={formContainerStyle}>
                     <h2 style={headingStyle}>IT Department Login</h2>
                     <form onSubmit={handleLogin}>
-                        {/* Email Input Field */}
                         <div style={inputContainerStyle}>
                             <label htmlFor="email" style={labelStyle}>Email Address</label>
                             <input
@@ -334,19 +446,17 @@ const LoginPage = ({ onLogin }) => {
                                 style={commonInputStyle}
                             />
                         </div>
-                        {/* Password Input Field with Eye Icon */}
                         <div style={inputContainerStyle}>
                             <label htmlFor="password" style={labelStyle}>Password</label>
                             <input
                                 type={showPassword ? 'text' : 'password'}
                                 id="password"
-                                style={{ ...commonInputStyle, paddingRight: '40px' }} // Increased right padding for icon space
+                                style={{ ...commonInputStyle, paddingRight: '40px' }}
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
                                 placeholder="Enter your password"
                                 required
                             />
-                            {/* Eye icon for password visibility toggle */}
                             <span
                                 onClick={() => setShowPassword(!showPassword)}
                                 style={passwordToggleIconStyle}
@@ -354,9 +464,7 @@ const LoginPage = ({ onLogin }) => {
                                 {showPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
                             </span>
                         </div>
-                        {/* Error Message */}
                         <p style={errorStyle}>{error}</p>
-                        {/* Login Button */}
                         <button
                             type="submit"
                             style={signInButtonStyle}
@@ -364,27 +472,124 @@ const LoginPage = ({ onLogin }) => {
                             onMouseOver={() => setSignInButtonHovered(true)}
                             onMouseLeave={() => setSignInButtonHovered(false)}
                         >
-                            {isLoading ? 'Logging In...' : 'Login'} {/* Changed text from Sign In to Login */}
+                            {isLoading ? 'Logging In...' : 'Login'}
                         </button>
 
-                        {/* Forgot Password Button */}
                         <button
                             type="button"
-                            onClick={() => navigate('/reset-password')}
+                            onClick={handleForgotPasswordClick}
                             style={forgotPasswordButtonStyle}
                             onMouseOver={() => setForgotButtonHovered(true)}
                             onMouseLeave={() => setForgotButtonHovered(false)}
                         >
                             Forgot Password?
                         </button>
-
-                        {/* Forgot Password Email Sent Message */}
-                        {forgotEmailSent && (
-                            <div style={{ color: '#296bd5ff', margin: '6px 0', fontSize: '13px', textAlign: 'center' }}>Reset email sent. Check your inbox.</div>
-                        )}
                     </form>
                 </div>
             </div>
+
+            {/* Forgot Password Modal */}
+            {showForgotModal && (
+                <div style={modalOverlayStyle} onClick={closeForgotModal}>
+                    <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
+                        <button style={closeButtonStyle} onClick={closeForgotModal}>
+                            ×
+                        </button>
+                        
+                        {forgotStep === 2 && (
+                            <button style={backButtonStyle} onClick={() => setForgotStep(1)}>
+                                <ArrowLeftOutlined />
+                            </button>
+                        )}
+
+                        {forgotStep === 1 ? (
+                            <>
+                                <h3 style={{ ...headingStyle, marginBottom: '1.5rem' }}>Reset Password</h3>
+                                <form onSubmit={handleRequestReset}>
+                                    <div style={inputContainerStyle}>
+                                        <label style={labelStyle}>Email Address</label>
+                                        <input
+                                            type="email"
+                                            value={forgotEmail}
+                                            onChange={(e) => setForgotEmail(e.target.value)}
+                                            placeholder="Enter your email"
+                                            required
+                                            style={commonInputStyle}
+                                        />
+                                    </div>
+                                    {forgotError && <p style={errorStyle}>{forgotError}</p>}
+                                    <button
+                                        type="submit"
+                                        style={signInButtonStyle}
+                                        disabled={forgotLoading}
+                                    >
+                                        {forgotLoading ? 'Sending...' : 'Send Reset Token'}
+                                    </button>
+                                </form>
+                            </>
+                        ) : (
+                            <>
+                                <h3 style={{ ...headingStyle, marginBottom: '1.5rem' }}>Enter New Password</h3>
+                                <form onSubmit={handleResetPassword}>
+                                    <div style={inputContainerStyle}>
+                                        <label style={labelStyle}>Reset Token</label>
+                                        <input
+                                            type="text"
+                                            value={resetToken}
+                                            onChange={(e) => setResetToken(e.target.value)}
+                                            placeholder="Enter the token from your email"
+                                            required
+                                            style={commonInputStyle}
+                                        />
+                                    </div>
+                                    <div style={inputContainerStyle}>
+                                        <label style={labelStyle}>New Password</label>
+                                        <input
+                                            type={showNewPassword ? 'text' : 'password'}
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            placeholder="Enter new password"
+                                            required
+                                            style={{ ...commonInputStyle, paddingRight: '40px' }}
+                                        />
+                                        <span
+                                            onClick={() => setShowNewPassword(!showNewPassword)}
+                                            style={passwordToggleIconStyle}
+                                        >
+                                            {showNewPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+                                        </span>
+                                    </div>
+                                    <div style={inputContainerStyle}>
+                                        <label style={labelStyle}>Confirm New Password</label>
+                                        <input
+                                            type={showConfirmPassword ? 'text' : 'password'}
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            placeholder="Confirm new password"
+                                            required
+                                            style={{ ...commonInputStyle, paddingRight: '40px' }}
+                                        />
+                                        <span
+                                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                            style={passwordToggleIconStyle}
+                                        >
+                                            {showConfirmPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+                                        </span>
+                                    </div>
+                                    {forgotError && <p style={errorStyle}>{forgotError}</p>}
+                                    <button
+                                        type="submit"
+                                        style={signInButtonStyle}
+                                        disabled={forgotLoading}
+                                    >
+                                        {forgotLoading ? 'Resetting...' : 'Reset Password'}
+                                    </button>
+                                </form>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
