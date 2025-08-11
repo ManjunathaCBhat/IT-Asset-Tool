@@ -1,413 +1,545 @@
-/*********************************************************************
- *  server.js  – Express + MongoDB + JWT
- *  Roles:
- *    • Admin  – full access
- *    • Editor – everything Admin can do EXCEPT create/delete users
- *    • Viewer – read-only (all modifying endpoints return 403)
- *
- *  NEW (role banners):
- *    • Login response returns an `info` string describing the user’s access.
- *    • GET /api/role-info returns `{ role, info }` for banner use on every page.
- *********************************************************************/
-const express  = require('express');
+// server.js
+const express = require('express');
 const mongoose = require('mongoose');
-const cors     = require('cors');
-const bcrypt   = require('bcryptjs');
-const jwt      = require('jsonwebtoken');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
-const moment   = require('moment');                 // date calculations
+const moment = require('moment'); // Import moment for date calculations
 
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 5000;
 
-/* ──────────────────────────  Middleware  ────────────────────────── */
+// --- Middleware ---
 app.use(cors());
-app.use(express.json());                            // parse application/json
+app.use(express.json()); // For parsing application/json
 
-/* ────────────────────  DB / JWT environment vars  ─────────────────*/
-const MONGO_URI  = process.env.MONGO_URI;
+// --- Database Connection ---
+const MONGO_URI = process.env.MONGO_URI;
+// --- JWT Secret ---
 const JWT_SECRET = process.env.JWT_SECRET;
 
-/* ───────────────────────  Role constants  ─────────────────────────*/
-const ROLES = { ADMIN: 'Admin', EDITOR: 'Editor', VIEWER: 'Viewer' };
-
-const roleMessage = (role) => {
-  switch (role) {
-    case ROLES.VIEWER:
-      return 'You have Viewer access – read-only mode and you will not be able to edit.';
-  }
-};
-
-/* ─────────────────────────  Schemas / Models  ─────────────────────*/
+// --- Mongoose Schemas ---
 const UserSchema = new mongoose.Schema({
-  email   : { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  role    : { type: String, enum: Object.values(ROLES), default: ROLES.VIEWER },
-  // resetPasswordToken : String,
-  // resetPasswordExpires: Date
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    role: { type: String, enum: ['Admin', 'Editor', 'Viewer'], default: 'Viewer' },
+    // Add these fields if you implement password reset token generation
+    // resetPasswordToken: String,
+    // resetPasswordExpires: Date
 });
 
 const EquipmentSchema = new mongoose.Schema({
-  assetId   : { type: String, required: true, unique: true },
-  category  : { type: String, required: true },
-  status    : {
-    type: String,
-    required: true,
-    enum: ['In Use', 'In Stock', 'Damaged', 'E-Waste', 'Removed']
-  },
-  model            : String,
-  serialNumber     : String,
-  warrantyInfo     : Date,                 // stored as Date for comparisons
-  location         : String,
-  comment          : String,
-  assigneeName     : String,
-  position         : String,
-  employeeEmail    : String,
-  phoneNumber      : String,
-  department       : String,
-  damageDescription: String,
-  purchasePrice    : { type: Number, default: 0 },
-  isDeleted        : { type: Boolean, default: false }
-}, { timestamps: true });
+    assetId: { type: String, required: true, unique: true },
+    category: { type: String, required: true },
+    status: { type: String, required: true, enum: ['In Use', 'In Stock', 'Damaged', 'E-Waste', 'Removed'] },
+    model: { type: String },
+    serialNumber: { type: String },
+    // IMPORTANT: To make date comparisons work reliably, this should be a Date type
+    // If you store 'Invalid date' string, MongoDB cannot query it as a date.
+    warrantyInfo: { type: Date }, // Changed to Date type for proper date comparisons
+    location: { type: String },
+    comment: { type: String },
+    assigneeName: { type: String },
+    position: { type: String },
+    employeeEmail: { type: String },
+    phoneNumber: { type: String },
+    department: { type: String },
+    damageDescription: { type: String },
+    purchasePrice: { type: Number, default: 0 },
+    isDeleted: {
+        type: Boolean,
+        default: false
+    }
+}, { timestamps: true }); // timestamps adds createdAt and updatedAt
 
-const User      = mongoose.model('User',      UserSchema);
+const User = mongoose.model('User', UserSchema);
 const Equipment = mongoose.model('Equipment', EquipmentSchema);
 
-/* ───────────────────────  Seed first Admin  ───────────────────────*/
+// --- Function to Seed First Admin User ---
 const seedAdminUser = async () => {
-  const ADMIN_EMAIL = 'admin@example.com';
-  try {
-    const exists = await User.findOne({ email: ADMIN_EMAIL });
-    if (!exists) {
-      const hash = await bcrypt.hash('password123', 10);
-      await User.create({ email: ADMIN_EMAIL, password: hash, role: ROLES.ADMIN });
-      console.log('🌱  Admin seeded → admin@example.com / password123');
+    const ADMIN_EMAIL = 'admin@example.com';
+    try {
+        const adminExists = await User.findOne({ email: ADMIN_EMAIL });
+        if (!adminExists) {
+            console.log(`No user found with email ${ADMIN_EMAIL}. Creating one...`);
+            const admin = new User({
+                email: ADMIN_EMAIL,
+                password: 'password123',
+                role: 'Admin'
+            });
+            const salt = await bcrypt.genSalt(10);
+            admin.password = await bcrypt.hash(admin.password, salt);
+            await admin.save();
+            console.log('Admin user created successfully!');
+        } else {
+            console.log('Admin user already exists.');
+        }
+    } catch (error) {
+        console.error('Error seeding admin user:', error);
     }
-  } catch (err) { console.error('Seed error:', err); }
 };
 
-/* ───────────────────────  MongoDB connect  ────────────────────────*/
+// --- Connect to DB and Seed Admin ---
 mongoose.connect(MONGO_URI)
-  .then(() => { console.log('✅  MongoDB connected'); seedAdminUser(); })
-  .catch(err => console.error('❌  MongoDB connection error:', err));
+    .then(() => {
+        console.log('MongoDB connected successfully.');
+        seedAdminUser();
+    })
+    .catch(err => console.error('MongoDB connection error:', err));
 
-/* ───────────────────────  Auth / Role guards  ─────────────────────*/
+
+// --- Authentication & Role Middleware ---
 const auth = (req, res, next) => {
-  const token = req.header('x-auth-token');
-  if (!token)
-    return res.status(401).json({ msg: 'No token, authorization denied' });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded.user;                       // { id, role, email }
-    next();
-  } catch {
-    res.status(401).json({ msg: 'Token is not valid' });
-  }
+    const token = req.header('x-auth-token');
+    if (!token) {
+        console.log('Auth middleware: No token provided');
+        return res.status(401).json({ msg: 'No token, authorization denied' });
+    }
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded.user; // Attach user info to request
+        next();
+    } catch (e) {
+        console.log('Auth middleware: Invalid token', e.message);
+        res.status(400).json({ msg: 'Token is not valid' });
+    }
 };
 
 const requireRole = (roles) => (req, res, next) => {
-  if (!req.user || !roles.includes(req.user.role))
-    return res.status(403).json({ msg: 'Access denied. Insufficient role.' });
-  next();
+    if (!req.user || !roles.includes(req.user.role)) {
+        console.log(`Access denied for user ${req.user ? req.user.email : 'N/A'} (role: ${req.user ? req.user.role : 'N/A'}) to route needing roles: ${roles.join(', ')}`);
+        return res.status(403).json({ msg: 'Access denied. Insufficient role.' });
+    }
+    next();
 };
 
-/* ─────────────────────────────  ROUTES  ───────────────────────────*/
+// --- API Endpoints ---
 
-/* =========================  USER ROUTES  ========================= */
+// --- User Endpoints (Keep these together) ---
 app.post('/api/users/login', async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    let user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ msg: 'Invalid credentials' });
-
-    const ok = await bcrypt.compare(password, user.password);
-    if (!ok) return res.status(400).json({ msg: 'Invalid credentials' });
-
-    const payload = { user: { id: user.id, role: user.role, email: user.email } };
-    jwt.sign(payload, JWT_SECRET, { expiresIn: '2h' }, (err, token) => {
-      if (err) throw err;
-      res.json({
-        token,
-        user: payload.user,
-        info: roleMessage(user.role)           // banner text for front-end
-      });
-    });
-  } catch (err) { console.error(err); res.status(500).send('Server error'); }
+    const { email, password } = req.body;
+    try {
+        let user = await User.findOne({ email });
+        if (!user) return res.status(400).json({ msg: 'Invalid credentials' });
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) return res.status(400).json({ msg: 'Invalid credentials' });
+        const payload = { user: { id: user.id, role: user.role, email: user.email } };
+        jwt.sign(payload, JWT_SECRET, { expiresIn: '2h' }, (err, token) => {
+            if (err) throw err;
+            res.json({ token, user: payload.user });
+        });
+    } catch (err) { console.error(err.message); res.status(500).send('Server error'); }
 });
 
-app.get('/api/users',
-  [auth, requireRole([ROLES.ADMIN])],
-  async (req, res) => {
+app.get('/api/users', [auth, requireRole(['Admin'])], async (req, res) => {
     try {
-      const users = await User.find().select('-password');
-      res.json(users);
-    } catch (err) { console.error(err); res.status(500).send('Server Error'); }
-  }
-);
+        const users = await User.find().select('-password');
+        res.json(users);
+    } catch (err) { console.error(err.message); res.status(500).send('Server Error'); }
+});
 
-app.post('/api/users/create',
-  [auth, requireRole([ROLES.ADMIN])],
-  async (req, res) => {
+app.post('/api/users/create', [auth, requireRole(['Admin'])], async (req, res) => {
     const { email, password, role } = req.body;
     try {
-      if (await User.findOne({ email }))
-        return res.status(400).json({ msg: 'User already exists' });
+        let user = await User.findOne({ email });
+        if (user) return res.status(400).json({ msg: 'User already exists' });
+        user = new User({ email, password, role });
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(password, salt);
+        await user.save();
+        res.json({ msg: 'User created successfully' });
+    } catch (err) { console.error(err.message); res.status(500).send('Server Error'); }
+});
 
-      const hash = await bcrypt.hash(password, 10);
-      await User.create({ email, password: hash, role });
-      res.json({ msg: 'User created successfully' });
-    } catch (err) { console.error(err); res.status(500).send('Server Error'); }
-  }
-);
-
-app.delete('/api/users/:id',
-  [auth, requireRole([ROLES.ADMIN])],
-  async (req, res) => {
+app.post('/api/reset-password', async (req, res) => {
+    console.log('Reset password request body:', req.body);
+    const { email, token, newPassword } = req.body;
     try {
-      if (req.params.id === req.user.id)
-        return res.status(400).json({ msg: 'Cannot delete your own account' });
+        const user = await User.findOne({
+            email,
+            resetPasswordToken: token,
+            resetPasswordExpires: { $gt: Date.now() } // Token not expired
+        });
 
-      const deletedUser = await User.findByIdAndRemove(req.params.id);
-      if (!deletedUser) return res.status(404).json({ msg: 'User not found' });
+        if (!user) {
+            return res.status(400).json({ message: 'Invalid or expired token.' });
+        }
 
-      res.json({ msg: 'User deleted' });
-    } catch (err) { console.error(err); res.status(500).send('Server Error'); }
-  }
-);
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
 
-/* banner-only helper so React can fetch on each page load */
-app.get('/api/role-info', auth, (req, res) => {
-  res.json({ role: req.user.role, info: roleMessage(req.user.role) });
+        // Clear reset token fields
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpires = undefined;
+
+        await user.save();
+
+        res.json({ message: 'Password has been reset successfully.' });
+    } catch (err) {
+        console.error('Reset password error:', err.message);
+        res.status(500).json({ message: 'Failed to reset password.' });
+    }
 });
 
-/* ===================  DASHBOARD SUMMARY ROUTES  =================== */
+app.delete('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) => {
+    try {
+        if (req.params.id === req.user.id) {
+            return res.status(400).json({ msg: 'Cannot delete your own account' });
+        }
+        const deletedUser = await User.findByIdAndRemove(req.params.id);
+        if (!deletedUser) {
+            return res.status(404).json({ msg: 'User not found' });
+        }
+        res.json({ msg: 'User deleted' });
+    } catch (err) { console.error(err.message); res.status(500).send('Server Error'); }
+});
+
+
+// --- Equipment Endpoints (REORDERED FOR SPECIFICITY) ---
+// ORDER: Most specific dashboard-related endpoints first, then general gets, then CUD.
+// This prevents broader routes from "eating" requests meant for more specific ones.
+
+
+// 1. Dashboard Specific Summary Endpoints
+// @route   GET /api/equipment/summary
+// @desc    Get summary counts for dashboard
+// @access  Private
 app.get('/api/equipment/summary', auth, async (req, res) => {
-  try {
-    const totalAssets = await Equipment.countDocuments({ isDeleted: { $ne: true } });
-    const inUse       = await Equipment.countDocuments({ status: 'In Use',  isDeleted: { $ne: true } });
-    const inStock     = await Equipment.countDocuments({ status: 'In Stock',isDeleted: { $ne: true } });
-    const damaged     = await Equipment.countDocuments({ status: 'Damaged', isDeleted: { $ne: true } });
-    const eWaste      = await Equipment.countDocuments({ status: 'E-Waste', isDeleted: { $ne: true } });
+    try {
+        const totalAssets = await Equipment.countDocuments({ isDeleted: { $ne: true } });
+        const inUse = await Equipment.countDocuments({ status: 'In Use', isDeleted: { $ne: true } });
+        const inStock = await Equipment.countDocuments({ status: 'In Stock', isDeleted: { $ne: true } });
+        const damaged = await Equipment.countDocuments({ status: 'Damaged', isDeleted: { $ne: true } });
+        const eWaste = await Equipment.countDocuments({ status: 'E-Waste', isDeleted: { $ne: true } });
 
-    const removed = await Equipment.countDocuments({
-      $or: [
-        { status: { $in: ['E-Waste', 'Damaged', 'Removed'] } },
-        { isDeleted: true }
-      ]
-    });
+        // FIX: Declare 'removed' before using it in res.json
+        const removed = await Equipment.countDocuments({
+            $or: [
+                { status: 'E-Waste' },
+                { status: 'Damaged' },
+                { status: 'Removed' },
+                { isDeleted: true }
+            ]
+        });
 
-    res.json({ totalAssets, inUse, inStock, damaged, eWaste, removed });
-  } catch (err) { console.error(err); res.status(500).send('Server Error'); }
+        res.json({
+            totalAssets,
+            inUse,
+            inStock,
+            damaged,
+            eWaste,
+            removed, // Ensure 'removed' is included in the response
+        });
+    } catch (err) {
+        console.error('Error in /api/equipment/summary:', err.message);
+        res.status(500).send('Server Error');
+    }
 });
 
+// @route   GET /api/equipment/total-value
+// @desc    Calculate total value of assets (excluding soft-deleted)
+// @access  Private
 app.get('/api/equipment/total-value', auth, async (req, res) => {
-  try {
-    const result = await Equipment.aggregate([
-      { $match: { isDeleted: { $ne: true } } },
-      { $group: { _id: null, total: { $sum: '$purchasePrice' } } }
-    ]);
-    const totalValue = result.length ? result[0].total : 0;
-    res.json({ totalValue });
-  } catch (err) { console.error(err); res.status(500).send('Server Error'); }
+    try {
+        const result = await Equipment.aggregate([
+            { $match: { isDeleted: { $ne: true } } },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: "$purchasePrice" }
+                }
+            }
+        ]);
+
+        const totalValue = result.length > 0 ? result[0].total : 0;
+        res.json({ totalValue });
+    } catch (err) {
+        console.error('Error in /api/equipment/total-value:', err.message);
+        res.status(500).send('Server Error');
+    }
 });
 
+// @route   GET /api/equipment/expiring-warranty
+// @desc    Get assets with warranty expiring in 30 days (excluding E-Waste and Damaged)
+// @access  Private
 app.get('/api/equipment/expiring-warranty', auth, async (req, res) => {
-  try {
-    const thirtyDaysFromNow = moment().add(30, 'days').toDate();
-    const now = new Date();
+    try {
+        const thirtyDaysFromNow = moment().add(30, 'days').toDate();
+        const now = new Date();
 
-    const expiringItems = await Equipment.find({
-      warrantyInfo: { $exists: true, $ne: null, $type: 9, $gte: now, $lte: thirtyDaysFromNow },
-      status: { $nin: ['E-Waste', 'Damaged', 'Removed'] },
-      isDeleted: { $ne: true }
-    }).select('model serialNumber warrantyInfo');
+        const expiringItems = await Equipment.find({
+            warrantyInfo: { $exists: true, $ne: null, $type: 9, $gte: now, $lte: thirtyDaysFromNow },
+            status: { $nin: ['E-Waste', 'Damaged', 'Removed'] }, // Exclude 'Removed' status too
+            isDeleted: { $ne: true }
+        }).select('model serialNumber warrantyInfo');
 
-    res.json(expiringItems);
-  } catch (err) { console.error(err); res.status(500).send('Server Error'); }
+        res.json(expiringItems);
+    } catch (err) {
+        console.error('Error in /api/equipment/expiring-warranty:', err.message);
+        res.status(500).send('Server Error');
+    }
 });
 
+// @route   GET /api/equipment/grouped-by-email
+// @desc    Get assets grouped by employee email
+// @access  Private
 app.get('/api/equipment/grouped-by-email', auth, async (req, res) => {
   try {
     const groupedData = await Equipment.aggregate([
-      { $match: { status: 'In Use', isDeleted: { $ne: true } } },
-      { $group: {
-          _id: '$employeeEmail',
-          assigneeName : { $first: '$assigneeName' },
-          position     : { $first: '$position' },
-          phoneNumber  : { $first: '$phoneNumber' },
-          department   : { $first: '$department' },
-          assets: { $push: {
-            _id: '$_id',
-            assetId       : '$assetId',
-            category      : '$category',
-            status        : '$status',
-            model         : '$model',
-            serialNumber  : '$serialNumber',
-            warrantyInfo  : '$warrantyInfo',
-            location      : '$location',
-            comment       : '$comment',
-            damageDescription: '$damageDescription',
-            purchasePrice : '$purchasePrice',
-            createdAt     : '$createdAt',
-            updatedAt     : '$updatedAt'
-          }},
+      { $match: { status: "In Use", isDeleted: { $ne: true } } },
+      {
+        $group: {
+          _id: "$employeeEmail",
+          assigneeName: { $first: "$assigneeName" },
+          position: { $first: "$position" },
+          phoneNumber: { $first: "$phoneNumber" },
+          department: { $first: "$department" },
+          assets: {
+              $push: {
+                  _id: "$_id",
+                  assetId: "$assetId",
+                  category: "$category",
+                  status: "$status",
+                  model: "$model",
+                  serialNumber: "$serialNumber",
+                  warrantyInfo: "$warrantyInfo",
+                  location: "$location",
+                  comment: "$comment",
+                  damageDescription: "$damageDescription",
+                  purchasePrice: "$purchasePrice",
+                  createdAt: "$createdAt",
+                  updatedAt: "$updatedAt"
+              }
+          },
           count: { $sum: 1 }
-      }},
-      { $project: {
-          _id: 0,
-          employeeEmail: '$_id',
-          assigneeName : 1,
-          position     : 1,
-          phoneNumber  : 1,
-          department   : 1,
-          assets       : 1,
-          count        : 1
-      }},
-      { $sort: { employeeEmail: 1 } }
+        }
+      },
+      {
+        $project: {
+            _id: 0,
+            employeeEmail: "$_id",
+            assigneeName: 1,
+            position: 1,
+            phoneNumber: 1,
+            department: 1,
+            assets: 1,
+            count: 1
+        }
+      },
+      {
+        $sort: { employeeEmail: 1 }
+      }
     ]);
     res.json(groupedData);
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Server error' }); }
+  } catch (error) {
+    console.error("Error in grouped-by-email aggregation:", error);
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
+
+// @route   GET /api/equipment/removed
+// @desc    Get all assets that have been marked as removed/e-waste/damaged
+// @access  Private (e.g., Admin/Editor role, potentially Viewer too for history)
 app.get('/api/equipment/removed', auth, async (req, res) => {
   try {
-    const removed = await Equipment.find({
+    // Assets are considered "removed" if their status is 'E-Waste' or 'Damaged',
+    // or if they have an 'isDeleted: true' flag.
+    const removedAssets = await Equipment.find({
       $or: [
-        { status: { $in: ['E-Waste', 'Damaged', 'Removed'] } },
+        { status: 'E-Waste' },
+        { status: 'Damaged' },
+        { status: 'Removed' }, // Include the new 'Removed' status here
         { isDeleted: true }
       ]
-    }).sort({ updatedAt: -1 });
-    res.json(removed);
-  } catch (err) { console.error(err); res.status(500).send('Server Error'); }
+    })
+    .sort({ updatedAt: -1 });
+
+    res.json(removedAssets);
+
+  } catch (err) {
+    console.error('Error in /api/equipment/removed:', err.message);
+    res.status(500).send('Server Error: Could not fetch removed assets.');
+  }
 });
 
-/* ===================  EQUIPMENT GENERAL GET  ===================== */
-app.get('/api/equipment', auth, async (req, res) => {
-  try {
-    const equipment = await Equipment.find({ isDeleted: { $ne: true } }).sort({ createdAt: -1 });
-    res.json(equipment);
-  } catch (err) { console.error(err); res.status(500).json({ message: err.message }); }
-});
 
+// 2. Specific Dynamic Route (should come before the general /api/equipment)
+// @route GET /api/equipment/count/:category
+// @desc Get equipment count by category (excluding soft-deleted) - This route is specific
+// @access Private
 app.get('/api/equipment/count/:category', auth, async (req, res) => {
-  try {
-    const count = await Equipment.countDocuments({
-      category: req.params.category,
-      isDeleted: { $ne: true }
-    });
-    res.json({ count });
-  } catch (err) { console.error(err); res.status(500).json({ message: err.message }); }
+    try {
+        const count = await Equipment.countDocuments({
+            category: req.params.category,
+            isDeleted: { $ne: true }
+        });
+        res.json({ count });
+    } catch (err) {
+        console.error('Error in /api/equipment/count/:category:', err.message);
+        res.status(500).json({ message: err.message });
+    }
 });
 
-/* ===================  EQUIPMENT CREATE  ========================= */
-app.post('/api/equipment',
-  [auth, requireRole([ROLES.ADMIN, ROLES.EDITOR])],
-  async (req, res) => {
-    const {
-      assetId, category, status, model, serialNumber, warrantyInfo, location, comment,
-      assigneeName, position, employeeEmail, phoneNumber, department,
-      damageDescription, purchasePrice
-    } = req.body;
+// 3. General Equipment Routes (More general, placed after specific ones)
+// @route GET /api/equipment
+// @desc GET all equipment (that is NOT soft-deleted)
+// @access Private
+app.get('/api/equipment', auth, async (req, res) => {
+    try {
+        const equipment = await Equipment.find({ isDeleted: { $ne: true } }).sort({ createdAt: -1 });
+        res.json(equipment);
+    } catch (err) {
+        console.error('Error in /api/equipment (GET all):', err.message);
+        res.status(500).json({ message: err.message });
+    }
+});
 
+// @route POST /api/equipment
+// @desc Add new equipment
+// @access Private (Admin, Editor)
+app.post('/api/equipment', [auth, requireRole(['Admin', 'Editor'])], async (req, res) => {
+    // Basic validation before creating Equipment instance
+    const { assetId, category, status, model, serialNumber, warrantyInfo, location, comment,
+            assigneeName, position, employeeEmail, phoneNumber, department, damageDescription, purchasePrice } = req.body;
+
+    // Convert warrantyInfo and purchaseDate to Date objects if they exist
     let parsedWarrantyInfo = null;
     if (warrantyInfo) {
-      const mWarranty = moment(warrantyInfo);
-      if (mWarranty.isValid()) parsedWarrantyInfo = mWarranty.toDate();
-      else console.warn(`POST: Invalid warrantyInfo: ${warrantyInfo}`);
+        const mWarranty = moment(warrantyInfo);
+        if (mWarranty.isValid()) {
+            parsedWarrantyInfo = mWarranty.toDate();
+        } else {
+            // Handle invalid date string gracefully, maybe send a warning or 400
+            console.warn(`POST request: Invalid warrantyInfo date string received: ${warrantyInfo}`);
+            // You might want to return an error here: return res.status(400).json({ msg: 'Invalid warrantyInfo date format' });
+        }
     }
 
     let parsedPurchaseDate = null;
+    // Assuming purchaseDate might also come in the payload and needs parsing
     if (req.body.purchaseDate) {
-      const mPurchase = moment(req.body.purchaseDate);
-      if (mPurchase.isValid()) parsedPurchaseDate = mPurchase.toDate();
-      else console.warn(`POST: Invalid purchaseDate: ${req.body.purchaseDate}`);
+        const mPurchaseDate = moment(req.body.purchaseDate);
+        if (mPurchaseDate.isValid()) {
+            parsedPurchaseDate = mPurchaseDate.toDate();
+        } else {
+            console.warn(`POST request: Invalid purchaseDate date string received: ${req.body.purchaseDate}`);
+        }
     }
 
+
     const newEquipment = new Equipment({
-      assetId, category, status, model, serialNumber,
-      warrantyInfo: parsedWarrantyInfo,
-      location, comment, assigneeName, position,
-      employeeEmail, phoneNumber, department, damageDescription, purchasePrice,
-      purchaseDate: parsedPurchaseDate
+        assetId, category, status, model, serialNumber,
+        warrantyInfo: parsedWarrantyInfo, // Use parsed Date object
+        location, comment, assigneeName, position,
+        employeeEmail, phoneNumber, department, damageDescription, purchasePrice,
+        purchaseDate: parsedPurchaseDate // Add purchaseDate to schema and here
     });
 
     try {
-      const saved = await newEquipment.save();
-      res.status(201).json(saved);
+        const savedEquipment = await newEquipment.save();
+        res.status(201).json(savedEquipment);
     } catch (err) {
-      if (err.name === 'ValidationError') {
-        const msg = Object.values(err.errors).map(v => v.message).join('. ');
-        return res.status(400).json({ message: msg });
-      }
-      if (err.code === 11000) {
-        return res.status(400).json({ message: 'Duplicate asset ID' });
-      }
-      console.error(err);
-      res.status(500).json({ message: 'Server error while creating equipment.' });
+        if (err.name === 'ValidationError') {
+            const messages = Object.values(err.errors).map(val => val.message);
+            return res.status(400).json({ message: messages.join('. ') });
+        }
+        if (err.code === 11000) { // Duplicate key error (e.g., assetId)
+            return res.status(400).json({ message: 'Duplicate asset ID. An asset with this ID already exists.' });
+        }
+        console.error('Error in /api/equipment (POST):', err);
+        res.status(500).json({ message: 'Server error while creating equipment.' });
     }
-  }
-);
+});
 
-/* ===================  EQUIPMENT UPDATE  ========================= */
-app.put('/api/equipment/:id',
-  [auth, requireRole([ROLES.ADMIN, ROLES.EDITOR])],
-  async (req, res) => {
+// @route PUT /api/equipment/:id
+// @desc Update existing equipment
+// @access Private (Admin, Editor)
+app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (req, res) => {
+    // Clone req.body to safely modify date fields for Mongoose
     const updateData = { ...req.body };
 
+    // Handle incoming date strings for warrantyInfo and purchaseDate
     if (updateData.warrantyInfo) {
-      const mW = moment(updateData.warrantyInfo);
-      updateData.warrantyInfo = mW.isValid() ? mW.toDate() : null;
+        const mWarranty = moment(updateData.warrantyInfo);
+        if (mWarranty.isValid()) {
+            updateData.warrantyInfo = mWarranty.toDate();
+        } else {
+            // If invalid date string is sent, set to null or remove the field
+            updateData.warrantyInfo = null; // Or undefined to let it default
+            console.warn(`PUT request for ${req.params.id}: Invalid warrantyInfo date string received: ${req.body.warrantyInfo}`);
+        }
     } else {
-      updateData.warrantyInfo = null;
+        // If warrantyInfo is explicitly null/empty in payload, set it to null in DB
+        updateData.warrantyInfo = null;
     }
 
     if (updateData.purchaseDate) {
-      const mP = moment(updateData.purchaseDate);
-      updateData.purchaseDate = mP.isValid() ? mP.toDate() : null;
+        const mPurchaseDate = moment(updateData.purchaseDate);
+        if (mPurchaseDate.isValid()) {
+            updateData.purchaseDate = mPurchaseDate.toDate();
+        } else {
+            updateData.purchaseDate = null;
+            console.warn(`PUT request for ${req.params.id}: Invalid purchaseDate date string received: ${req.body.purchaseDate}`);
+        }
     } else {
-      updateData.purchaseDate = null;
+        updateData.purchaseDate = null;
     }
 
-    if (req.body.status !== 'Damaged') updateData.damageDescription = null;
-    if (updateData.comment === 'null') updateData.comment = null;
+    // Ensure damageDescription is cleared if status changes from Damaged
+    if (req.body.status !== 'Damaged') {
+        updateData.damageDescription = null; // Or undefined
+    }
+
+    // Ensure comment is properly handled (if it comes as "null" string, convert to null)
+    if (updateData.comment === "null") {
+        updateData.comment = null;
+    }
 
     try {
-      const updated = await Equipment.findByIdAndUpdate(
-        req.params.id, updateData, { new: true, runValidators: true }
-      );
-      if (!updated) return res.status(404).json({ message: 'Equipment not found' });
-      res.json(updated);
-    } catch (err) {
-      if (err.name === 'ValidationError') {
-        const msg = Object.values(err.errors).map(v => v.message).join('. ');
-        return res.status(400).json({ message: msg });
-      }
-      if (err.code === 11000) {
-        return res.status(400).json({ message: 'Duplicate asset ID' });
-      }
-      console.error(err);
-      res.status(500).json({ message: 'Server error during equipment update.' });
-    }
-  }
-);
+        // Validate the update payload before applying
+        const updatedEquipment = await Equipment.findByIdAndUpdate(
+            req.params.id,
+            updateData, // Use the processed updateData
+            { new: true, runValidators: true }
+        );
 
-/* ===================  EQUIPMENT SOFT-DELETE  ===================== */
-app.delete('/api/equipment/:id',
-  [auth, requireRole([ROLES.ADMIN])],
-  async (req, res) => {
+        if (!updatedEquipment) return res.status(404).json({ message: 'Equipment not found' });
+        res.json(updatedEquipment);
+    } catch (err) {
+        if (err.name === 'ValidationError') {
+            const messages = Object.values(err.errors).map(val => val.message);
+            return res.status(400).json({ message: messages.join('. ') });
+        }
+        if (err.code === 11000) { // Duplicate key error (e.g., assetId)
+            return res.status(400).json({ message: 'Duplicate asset ID. An asset with this ID already exists.' });
+        }
+        console.error('Error in /api/equipment/:id (PUT):', err.message, err); // Log full error object
+        res.status(500).json({ message: 'Server error during equipment update.' });
+    }
+});
+
+// @route DELETE /api/equipment/:id
+// @desc Soft delete equipment (mark as isDeleted: true)
+// @access Private (Admin only)
+app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res) => {
     try {
-      const softDeleted = await Equipment.findByIdAndUpdate(
-        req.params.id, { isDeleted: true }, { new: true }
-      );
-      if (!softDeleted) return res.status(404).json({ message: 'Equipment not found' });
-      res.json({ message: 'Equipment marked as deleted successfully' });
+        const softDeletedEquipment = await Equipment.findByIdAndUpdate(
+            req.params.id,
+            { isDeleted: true }, // Set isDeleted to true
+            { new: true } // Return the updated document
+        );
+        if (!softDeletedEquipment) {
+            return res.status(404).json({ message: 'Equipment not found' });
+        }
+        res.json({ message: 'Equipment marked as deleted successfully' });
     } catch (err) {
-      console.error(err);
-      res.status(500).json({ message: err.message });
+        console.error('Error in /api/equipment/:id (DELETE):', err.message);
+        res.status(500).json({ message: err.message });
     }
-  }
-);
+});
 
-/* ─────────────────────────  Server Start  ─────────────────────────*/
-app.listen(PORT, () => console.log(`🚀  Server running on port ${PORT}`));
+
+// --- Server Start ---
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
