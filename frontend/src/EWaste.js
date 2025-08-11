@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Table, Typography, message, Input, Space, Popconfirm, Button } from 'antd'; // Import Popconfirm and Button
-import { DeleteOutlined,MinusCircleOutlined } from '@ant-design/icons'; // Import DeleteOutlined icon
-import moment from 'moment'; // Import moment for handling dates
+import { Table, Typography, message, Input, Space, Popconfirm, Button } from 'antd';
+import { DeleteOutlined } from '@ant-design/icons';
+import moment from 'moment';
 
 const { Title } = Typography;
 const { Search } = Input;
 
-const EWaste = () => {
+const EWaste = ({ user }) => {
     const [data, setData] = useState([]);
     const [filteredData, setFilteredData] = useState([]);
     const [searchText, setSearchText] = useState('');
@@ -32,7 +32,6 @@ const EWaste = () => {
             setData(ewasteAssets);
             setFilteredData(ewasteAssets);
         } catch (error) {
-            console.error('Error fetching E-Waste assets:', error);
             message.error('Failed to fetch E-Waste assets.');
         }
     };
@@ -50,7 +49,7 @@ const EWaste = () => {
             item.comment?.toLowerCase().includes(value.toLowerCase())
         );
         setFilteredData(filtered);
-        setPagination(p => ({ ...p, current: 1 }));
+        setPagination((p) => ({ ...p, current: 1 }));
     };
 
     const handleTableChange = (pag) => {
@@ -61,6 +60,7 @@ const EWaste = () => {
         });
     };
 
+    // --- Delete (Move to Removed) ---
     const handleDelete = async (record) => {
         try {
             await axios.put(`http://localhost:5000/api/equipment/${record._id}`, {
@@ -70,25 +70,9 @@ const EWaste = () => {
             }, {
                 headers: getAuthHeader(),
             });
-
             message.success(`Asset "${record.model}" (${record.serialNumber}) moved to Removed.`);
-
-            // Update local state to remove the item from the E-Waste list
-            const updatedData = data.filter(item => item._id !== record._id);
-            setData(updatedData);
-            setFilteredData(updatedData.filter(item =>
-                item.category?.toLowerCase().includes(searchText.toLowerCase()) ||
-                item.model?.toLowerCase().includes(searchText.toLowerCase()) ||
-                item.serialNumber?.toLowerCase().includes(searchText.toLowerCase()) ||
-                item.comment?.toLowerCase().includes(searchText.toLowerCase())
-            )); // Re-apply search filter
-
-            // Full reload (hard refresh), or remove manually from filteredData for a soft update:
-            // window.location.reload(); // If you want a HARD refresh
-            // Soft update (recommended for UX):
             fetchEWasteAssets();
         } catch (error) {
-            console.error('Error moving asset to Removed:', error);
             message.error('Failed to move asset to Removed. Please try again.');
         }
     };
@@ -131,8 +115,14 @@ const EWaste = () => {
                     onConfirm={() => handleDelete(record)}
                     okText="Yes"
                     cancelText="No"
+                    disabled={user?.role === "Viewer"}
                 >
-                    <Button type="link" danger icon={<MinusCircleOutlined />}>
+                    <Button
+                        type="link"
+                        danger
+                        icon={<DeleteOutlined />}
+                        disabled={user?.role === "Viewer"}
+                    >
                         Remove
                     </Button>
                 </Popconfirm>

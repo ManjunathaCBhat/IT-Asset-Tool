@@ -24,7 +24,7 @@ const inlineStyles = (
   </style>
 );
 
-// InfoTable for asset details
+// Info modal asset table
 const InfoTable = ({ asset }) => (
   <Table
     style={{ margin: 0, marginBottom: 20 }}
@@ -72,7 +72,7 @@ const getAuthHeader = () => {
   return token ? { 'x-auth-token': token } : {};
 };
 
-const DamagedProducts = () => {
+const DamagedProducts = ({ user }) => {
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -250,6 +250,7 @@ const DamagedProducts = () => {
             type="primary"
             onClick={() => handleStartRepair(asset)}
             title="Repaired & Return to In Stock"
+            disabled={user?.role === "Viewer"}
           >
             Repaired
           </Button>
@@ -258,8 +259,14 @@ const DamagedProducts = () => {
             onConfirm={() => handleDelete(asset)}
             okText="Delete"
             cancelText="Cancel"
+            disabled={user?.role === "Viewer"}
           >
-            <Button icon={<DeleteOutlined />} danger title="Remove from Damaged" />
+            <Button
+              icon={<DeleteOutlined />}
+              danger
+              title="Remove from Damaged"
+              disabled={user?.role === "Viewer"}
+            />
           </Popconfirm>
         </Space>
       ),
