@@ -1,4 +1,3 @@
-// src/LoginPage.js
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { message } from 'antd';
@@ -16,7 +15,7 @@ const LoginPage = ({ onLogin }) => {
 
     // Forgot Password States
     const [showForgotModal, setShowForgotModal] = useState(false);
-    const [forgotStep, setForgotStep] = useState(1); // 1: Enter email, 2: Enter new passwords
+    const [forgotStep, setForgotStep] = useState(1);
     const [forgotEmail, setForgotEmail] = useState('');
     const [resetToken, setResetToken] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -26,11 +25,40 @@ const LoginPage = ({ onLogin }) => {
     const [forgotLoading, setForgotLoading] = useState(false);
     const [forgotError, setForgotError] = useState('');
 
+    // Screen size tracking
+    const [screenSize, setScreenSize] = useState({
+        width: window.innerWidth,
+        height: window.innerHeight
+    });
+
     const canvasRef = useRef(null);
     const mouse = useRef({ x: null, y: null, radius: 150 });
     const navigate = useNavigate();
 
-    // Canvas animation code (keeping your existing animation)
+    // Responsive breakpoints
+    const isMobile = screenSize.width <= 768;
+    const isTablet = screenSize.width > 768 && screenSize.width <= 1024;
+    const isSmallMobile = screenSize.width <= 480;
+
+    // Handle screen resize
+    useEffect(() => {
+        const handleResize = () => {
+            setScreenSize({
+                width: window.innerWidth,
+                height: window.innerHeight
+            });
+        };
+
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('orientationchange', handleResize);
+
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('orientationchange', handleResize);
+        };
+    }, []);
+
+    // Canvas animation
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -91,7 +119,9 @@ const LoginPage = ({ onLogin }) => {
 
         function init() {
             particlesArray = [];
-            const numberOfParticles = (canvas.width * canvas.height) / 7000;
+            const numberOfParticles = isMobile ? 
+                Math.min((canvas.width * canvas.height) / 15000, 20) : 
+                Math.min((canvas.width * canvas.height) / 7000, 50);
             const baseColors = ['rgba(255, 255, 255, 0.5)', 'rgba(74, 144, 226, 0.6)', 'rgba(208, 2, 27, 0.6)'];
 
             for (let i = 0; i < numberOfParticles; i++) {
@@ -107,7 +137,7 @@ const LoginPage = ({ onLogin }) => {
         }
 
         function connect() {
-            const maxDistance = 120;
+            const maxDistance = isMobile ? 80 : 120;
             for (let a = 0; a < particlesArray.length; a++) {
                 for (let b = a; b < particlesArray.length; b++) {
                     const dx = particlesArray[a].x - particlesArray[b].x;
@@ -130,7 +160,7 @@ const LoginPage = ({ onLogin }) => {
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             particlesArray.forEach(p => p.update());
-            connect();
+            if (!isMobile) connect();
             animationFrameId = requestAnimationFrame(animate);
         }
 
@@ -140,8 +170,10 @@ const LoginPage = ({ onLogin }) => {
         };
 
         const handleMouseMove = (event) => {
-            mouse.current.x = event.x;
-            mouse.current.y = event.y;
+            if (!isMobile) {
+                mouse.current.x = event.x;
+                mouse.current.y = event.y;
+            }
         };
 
         const handleMouseOut = () => {
@@ -154,16 +186,20 @@ const LoginPage = ({ onLogin }) => {
         animate();
 
         window.addEventListener('resize', handleCanvasResize);
-        canvas.addEventListener('mousemove', handleMouseMove);
-        canvas.addEventListener('mouseout', handleMouseOut);
+        if (!isMobile) {
+            canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('mouseout', handleMouseOut);
+        }
 
         return () => {
             window.removeEventListener('resize', handleCanvasResize);
-            canvas.removeEventListener('mousemove', handleMouseMove);
-            canvas.removeEventListener('mouseout', handleMouseOut);
+            if (!isMobile) {
+                canvas.removeEventListener('mousemove', handleMouseMove);
+                canvas.removeEventListener('mouseout', handleMouseOut);
+            }
             cancelAnimationFrame(animationFrameId);
         };
-    }, []);
+    }, [isMobile]);
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -243,7 +279,6 @@ const LoginPage = ({ onLogin }) => {
         setForgotLoading(true);
         setForgotError('');
 
-        // Validation
         if (!resetToken || !newPassword || !confirmPassword) {
             setForgotError('Please fill in all fields.');
             setForgotLoading(false);
@@ -281,177 +316,336 @@ const LoginPage = ({ onLogin }) => {
         }
     };
 
-    // --- STYLES ---
-    const commonInputStyle = {
-        padding: '10px 15px',
-        width: '100%',
-        height: '40px',
-        borderRadius: '4px',
-        border: '1px solid #D5D5D5',
-        boxSizing: 'border-box',
-        fontSize: '14px',
-        color: '#000929',
-    };
+    // Complete Responsive Styles
+    const styles = {
+        // Main container with proper viewport handling
+        container: {
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            width: '100vw',
+            height: '100vh',
+            maxWidth: '100%',
+            maxHeight: '100%',
+            overflow: 'hidden',
+            fontFamily: "'Quicksand', sans-serif",
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            margin: 0,
+            padding: 0,
+            boxSizing: 'border-box'
+        },
 
-    const pageStyle = { display: 'flex', width: '100%', height: '100vh', fontFamily: "'Quicksand', sans-serif" };
-    const leftPanelStyle = { position: 'relative', flex: 1, background: '#0d1a3a', overflow: 'hidden' };
-    const canvasStyle = { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 };
-    const overlayContentStyle = {
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        zIndex: 2,
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        flexDirection: 'column',
-        color: 'white',
-        textAlign: 'center',
-        width: '80%',
-        maxWidth: '400px',
-    };
-    const logoStyle = {
-        width: '100%',
-        maxWidth: '300px',
-        height: 'auto',
-        display: 'block',
-        marginBottom: '10px',
-    };
+        // Left panel
+        leftPanel: {
+            position: 'relative',
+            flex: isMobile ? '0 0 35vh' : '1 1 50%',
+            background: '#0d1a3a',
+            overflow: 'hidden',
+            minHeight: isMobile ? '35vh' : '100vh'
+        },
 
-    const rightPanelStyle = { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#F1F1F1', position: 'relative' };
-    const formContainerStyle = { backgroundColor: '#FFFFFF', padding: '2.5rem', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)', width: '100%', maxWidth: '400px', textAlign: 'center' };
-    const headingStyle = { color: '#2C4B84', fontSize: '18px', fontWeight: '700', marginBottom: '2rem' };
-    const labelStyle = { display: 'block', textAlign: 'left', color: '#6C727F', fontSize: '12px', fontWeight: '500', marginBottom: '0.4rem' };
+        // Canvas
+        canvas: {
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            zIndex: 1
+        },
 
-    const signInButtonStyle = {
-        width: '100%',
-        padding: '12px',
-        border: 'none',
-        borderRadius: '8px',
-        backgroundColor: signInButtonHovered ? '#1d54b8' : '#296bd5ff',
-        color: 'white',
-        fontSize: '14px',
-        fontWeight: '700',
-        cursor: 'pointer',
-        marginTop: '0.5rem',
-        transition: 'background-color 0.3s ease',
-    };
+        // Logo container
+        logoContainer: {
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 2,
+            textAlign: 'center',
+            color: 'white',
+            padding: isSmallMobile ? '15px' : '20px',
+            width: '90%',
+            maxWidth: '400px'
+        },
 
-    const forgotPasswordButtonStyle = {
-        background: 'none',
-        color: forgotButtonHovered ? '#1d54b8' : '#296bd5ff',
-        border: 'none',
-        cursor: 'pointer',
-        marginTop: '1rem',
-        fontSize: '13px',
-        textAlign: 'center',
-        display: 'block',
-        width: '100%',
-        transition: 'color 0.3s ease',
-    };
+        // Logo
+        logo: {
+            maxWidth: isSmallMobile ? '140px' : isMobile ? '180px' : '280px',
+            width: '100%',
+            height: 'auto',
+            marginBottom: '10px',
+            display: 'block'
+        },
 
-    const errorStyle = { color: '#D5292B', fontSize: '12px', marginTop: '0.8rem', height: '14px', textAlign: 'center' };
-    const subtitleStyle = { color: '#FFFFFF', opacity: 0.8, fontSize: '14px', fontWeight: '500', marginTop: '4px' };
-    const passwordToggleIconStyle = {
-        position: 'absolute',
-        right: '15px',
-        top: '67%',
-        transform: 'translateY(-50%)',
-        cursor: 'pointer',
-        color: '#6C727F',
-        fontSize: '16px',
-        zIndex: 2,
-    };
-    const inputContainerStyle = {
-        marginBottom: '1.2rem',
-        position: 'relative',
-    };
+        // Subtitle
+        subtitle: {
+            color: '#FFFFFF',
+            opacity: 0.8,
+            fontSize: isSmallMobile ? '10px' : isMobile ? '12px' : '14px',
+            fontWeight: '500',
+            lineHeight: 1.3
+        },
 
-    // Modal Styles
-    const modalOverlayStyle = {
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 1000,
-    };
+        // Right panel
+        rightPanel: {
+            flex: isMobile ? '1 1 65vh' : '1 1 50%',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: '#F1F1F1',
+            padding: isSmallMobile ? '10px' : isMobile ? '15px' : '20px',
+            boxSizing: 'border-box',
+            overflow: 'auto'
+        },
 
-    const modalContentStyle = {
-        backgroundColor: '#FFFFFF',
-        padding: '2rem',
-        borderRadius: '16px',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
-        width: '90%',
-        maxWidth: '400px',
-        textAlign: 'center',
-        position: 'relative',
-    };
+        // Form container
+        formContainer: {
+            backgroundColor: '#FFFFFF',
+            padding: isSmallMobile ? '1.2rem' : isMobile ? '1.5rem' : '2.5rem',
+            borderRadius: '16px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
+            width: '100%',
+            maxWidth: isSmallMobile ? '100%' : '400px',
+            textAlign: 'center',
+            boxSizing: 'border-box'
+        },
 
-    const backButtonStyle = {
-        position: 'absolute',
-        top: '20px',
-        left: '20px',
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer',
-        fontSize: '18px',
-        color: '#296bd5ff',
-    };
+        // Heading
+        heading: {
+            color: '#2C4B84',
+            fontSize: isSmallMobile ? '14px' : isMobile ? '16px' : '18px',
+            fontWeight: '700',
+            marginBottom: isMobile ? '1.5rem' : '2rem',
+            margin: '0 0 2rem 0'
+        },
 
-    const closeButtonStyle = {
-        position: 'absolute',
-        top: '15px',
-        right: '20px',
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer',
-        fontSize: '20px',
-        color: '#666',
+        // Input container
+        inputContainer: {
+            marginBottom: '1.2rem',
+            position: 'relative',
+            textAlign: 'left'
+        },
+
+        // Label
+        label: {
+            display: 'block',
+            textAlign: 'left',
+            color: '#6C727F',
+            fontSize: '12px',
+            fontWeight: '500',
+            marginBottom: '0.5rem'
+        },
+
+        // Input
+        input: {
+            padding: isSmallMobile ? '10px 12px' : '12px 15px',
+            width: '100%',
+            height: isSmallMobile ? '40px' : '44px',
+            borderRadius: '8px',
+            border: '1px solid #D5D5D5',
+            boxSizing: 'border-box',
+            fontSize: '14px',
+            color: '#000929',
+            outline: 'none',
+            transition: 'border-color 0.3s ease'
+        },
+
+        // Password input
+        passwordInput: {
+            padding: isSmallMobile ? '10px 40px 10px 12px' : '12px 45px 12px 15px',
+            width: '100%',
+            height: isSmallMobile ? '40px' : '44px',
+            borderRadius: '8px',
+            border: '1px solid #D5D5D5',
+            boxSizing: 'border-box',
+            fontSize: '14px',
+            color: '#000929',
+            outline: 'none',
+            transition: 'border-color 0.3s ease'
+        },
+
+        // Eye icon
+        eyeIcon: {
+            position: 'absolute',
+            right: '15px',
+            top: '70%',
+            transform: 'translateY(-50%)',
+            cursor: 'pointer',
+            color: '#6C727F',
+            fontSize: '16px',
+            zIndex: 2,
+            padding: '2px'
+        },
+
+        // Error message
+        error: {
+            color: '#D5292B',
+            fontSize: '12px',
+            textAlign: 'center',
+            margin: '0 0 1rem 0',
+            minHeight: '15px'
+        },
+
+        // Primary button
+        primaryButton: {
+            width: '100%',
+            padding: isSmallMobile ? '10px' : '12px',
+            border: 'none',
+            borderRadius: '8px',
+            backgroundColor: signInButtonHovered ? '#1d54b8' : '#296bd5ff',
+            color: 'white',
+            fontSize: '14px',
+            fontWeight: '700',
+            cursor: isLoading ? 'not-allowed' : 'pointer',
+            transition: 'all 0.3s ease',
+            opacity: isLoading ? 0.7 : 1
+        },
+
+        // Forgot password button
+        forgotButton: {
+            background: 'none',
+            color: forgotButtonHovered ? '#1d54b8' : '#296bd5ff',
+            border: 'none',
+            cursor: 'pointer',
+            marginTop: '1rem',
+            fontSize: '13px',
+            width: '100%',
+            padding: '10px',
+            transition: 'color 0.3s ease'
+        },
+
+        // Modal overlay with proper viewport coverage
+        modalOverlay: {
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 9999,
+            padding: 0,
+            margin: 0,
+            overflow: 'auto'
+        },
+
+        // Modal content with responsive dimensions
+        modalContent: {
+            backgroundColor: '#FFFFFF',
+            borderRadius: '16px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+            position: 'relative',
+            boxSizing: 'border-box',
+            margin: isMobile ? '10px' : '20px',
+            
+            // Responsive width and height
+            width: isMobile ? 'calc(100vw - 20px)' : '90vw',
+            maxWidth: isMobile ? '100%' : '500px',
+            
+            // Dynamic height based on content
+            maxHeight: isMobile ? 'calc(100vh - 40px)' : '90vh',
+            minHeight: 'auto',
+            
+            // Scrollable content
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            
+            // Proper padding
+            padding: isSmallMobile ? '1rem' : isMobile ? '1.5rem' : '2rem'
+        },
+
+        // Modal buttons
+        modalCloseButton: {
+            position: 'absolute',
+            top: '10px',
+            right: '15px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '28px',
+            color: '#666',
+            width: '40px',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '50%',
+            zIndex: 10,
+            transition: 'background-color 0.3s ease'
+        },
+
+        modalBackButton: {
+            position: 'absolute',
+            top: '10px',
+            left: '15px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '20px',
+            color: '#296bd5ff',
+            width: '40px',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '50%',
+            zIndex: 10,
+            transition: 'background-color 0.3s ease'
+        },
+
+        // Content wrapper inside modal
+        modalContentWrapper: {
+            width: '100%',
+            paddingTop: '40px',
+            boxSizing: 'border-box'
+        }
     };
 
     return (
-        <div style={pageStyle}>
-            <div style={leftPanelStyle}>
-                <canvas ref={canvasRef} style={canvasStyle} />
-                <div style={overlayContentStyle}>
+        <div style={styles.container}>
+            {/* Left Panel */}
+            <div style={styles.leftPanel}>
+                <canvas ref={canvasRef} style={styles.canvas} />
+                <div style={styles.logoContainer}>
                     <img
                         src={`${process.env.PUBLIC_URL}/C_lab logo.png`}
                         alt="Cirrus Labs Logo"
-                        style={logoStyle}
+                        style={styles.logo}
                     />
-                    <div style={subtitleStyle}>
+                    <div style={styles.subtitle}>
                         IT Asset Management Dashboard
                     </div>
                 </div>
             </div>
-            <div style={rightPanelStyle}>
-                <div style={formContainerStyle}>
-                    <h2 style={headingStyle}>IT Department Login</h2>
+
+            {/* Right Panel */}
+            <div style={styles.rightPanel}>
+                <div style={styles.formContainer}>
+                    <h2 style={styles.heading}>IT Department Login</h2>
+                    
                     <form onSubmit={handleLogin}>
-                        <div style={inputContainerStyle}>
-                            <label htmlFor="email" style={labelStyle}>Email Address</label>
+                        <div style={styles.inputContainer}>
+                            <label style={styles.label}>Email Address</label>
                             <input
                                 type="email"
-                                id="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 placeholder="Enter your email"
                                 required
-                                style={commonInputStyle}
+                                style={styles.input}
                             />
                         </div>
-                        <div style={inputContainerStyle}>
-                            <label htmlFor="password" style={labelStyle}>Password</label>
+                        
+                        <div style={styles.inputContainer}>
+                            <label style={styles.label}>Password</label>
                             <input
                                 type={showPassword ? 'text' : 'password'}
-                                id="password"
-                                style={{ ...commonInputStyle, paddingRight: '40px' }}
+                                style={styles.passwordInput}
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
                                 placeholder="Enter your password"
@@ -459,17 +653,19 @@ const LoginPage = ({ onLogin }) => {
                             />
                             <span
                                 onClick={() => setShowPassword(!showPassword)}
-                                style={passwordToggleIconStyle}
+                                style={styles.eyeIcon}
                             >
                                 {showPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
                             </span>
                         </div>
-                        <p style={errorStyle}>{error}</p>
+                        
+                        <div style={styles.error}>{error}</div>
+                        
                         <button
                             type="submit"
-                            style={signInButtonStyle}
+                            style={styles.primaryButton}
                             disabled={isLoading}
-                            onMouseOver={() => setSignInButtonHovered(true)}
+                            onMouseEnter={() => setSignInButtonHovered(true)}
                             onMouseLeave={() => setSignInButtonHovered(false)}
                         >
                             {isLoading ? 'Logging In...' : 'Login'}
@@ -478,8 +674,8 @@ const LoginPage = ({ onLogin }) => {
                         <button
                             type="button"
                             onClick={handleForgotPasswordClick}
-                            style={forgotPasswordButtonStyle}
-                            onMouseOver={() => setForgotButtonHovered(true)}
+                            style={styles.forgotButton}
+                            onMouseEnter={() => setForgotButtonHovered(true)}
                             onMouseLeave={() => setForgotButtonHovered(false)}
                         >
                             Forgot Password?
@@ -490,103 +686,118 @@ const LoginPage = ({ onLogin }) => {
 
             {/* Forgot Password Modal */}
             {showForgotModal && (
-                <div style={modalOverlayStyle} onClick={closeForgotModal}>
-                    <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-                        <button style={closeButtonStyle} onClick={closeForgotModal}>
+                <div style={styles.modalOverlay} onClick={closeForgotModal}>
+                    <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+                        
+                        {/* Close Button */}
+                        <button 
+                            style={styles.modalCloseButton} 
+                            onClick={closeForgotModal}
+                            onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                        >
                             ×
                         </button>
                         
+                        {/* Back Button */}
                         {forgotStep === 2 && (
-                            <button style={backButtonStyle} onClick={() => setForgotStep(1)}>
+                            <button 
+                                style={styles.modalBackButton} 
+                                onClick={() => setForgotStep(1)}
+                                onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f8ff'}
+                                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                            >
                                 <ArrowLeftOutlined />
                             </button>
                         )}
 
-                        {forgotStep === 1 ? (
-                            <>
-                                <h3 style={{ ...headingStyle, marginBottom: '1.5rem' }}>Reset Password</h3>
-                                <form onSubmit={handleRequestReset}>
-                                    <div style={inputContainerStyle}>
-                                        <label style={labelStyle}>Email Address</label>
-                                        <input
-                                            type="email"
-                                            value={forgotEmail}
-                                            onChange={(e) => setForgotEmail(e.target.value)}
-                                            placeholder="Enter your email"
-                                            required
-                                            style={commonInputStyle}
-                                        />
-                                    </div>
-                                    {forgotError && <p style={errorStyle}>{forgotError}</p>}
-                                    <button
-                                        type="submit"
-                                        style={signInButtonStyle}
-                                        disabled={forgotLoading}
-                                    >
-                                        {forgotLoading ? 'Sending...' : 'Send Reset Token'}
-                                    </button>
-                                </form>
-                            </>
-                        ) : (
-                            <>
-                                <h3 style={{ ...headingStyle, marginBottom: '1.5rem' }}>Enter New Password</h3>
-                                <form onSubmit={handleResetPassword}>
-                                    <div style={inputContainerStyle}>
-                                        <label style={labelStyle}>Reset Token</label>
-                                        <input
-                                            type="text"
-                                            value={resetToken}
-                                            onChange={(e) => setResetToken(e.target.value)}
-                                            placeholder="Enter the token from your email"
-                                            required
-                                            style={commonInputStyle}
-                                        />
-                                    </div>
-                                    <div style={inputContainerStyle}>
-                                        <label style={labelStyle}>New Password</label>
-                                        <input
-                                            type={showNewPassword ? 'text' : 'password'}
-                                            value={newPassword}
-                                            onChange={(e) => setNewPassword(e.target.value)}
-                                            placeholder="Enter new password"
-                                            required
-                                            style={{ ...commonInputStyle, paddingRight: '40px' }}
-                                        />
-                                        <span
-                                            onClick={() => setShowNewPassword(!showNewPassword)}
-                                            style={passwordToggleIconStyle}
+                        <div style={styles.modalContentWrapper}>
+                            {forgotStep === 1 ? (
+                                <>
+                                    <h3 style={{...styles.heading, marginBottom: '1.5rem'}}>Reset Password</h3>
+                                    <form onSubmit={handleRequestReset}>
+                                        <div style={styles.inputContainer}>
+                                            <label style={styles.label}>Email Address</label>
+                                            <input
+                                                type="email"
+                                                value={forgotEmail}
+                                                onChange={(e) => setForgotEmail(e.target.value)}
+                                                placeholder="Enter your email"
+                                                required
+                                                style={styles.input}
+                                            />
+                                        </div>
+                                        <div style={styles.error}>{forgotError}</div>
+                                        <button
+                                            type="submit"
+                                            style={{...styles.primaryButton, backgroundColor: '#296bd5ff'}}
+                                            disabled={forgotLoading}
                                         >
-                                            {showNewPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-                                        </span>
-                                    </div>
-                                    <div style={inputContainerStyle}>
-                                        <label style={labelStyle}>Confirm New Password</label>
-                                        <input
-                                            type={showConfirmPassword ? 'text' : 'password'}
-                                            value={confirmPassword}
-                                            onChange={(e) => setConfirmPassword(e.target.value)}
-                                            placeholder="Confirm new password"
-                                            required
-                                            style={{ ...commonInputStyle, paddingRight: '40px' }}
-                                        />
-                                        <span
-                                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                            style={passwordToggleIconStyle}
+                                            {forgotLoading ? 'Sending...' : 'Send Reset Token'}
+                                        </button>
+                                    </form>
+                                </>
+                            ) : (
+                                <>
+                                    <h3 style={{...styles.heading, marginBottom: '1.5rem'}}>Enter New Password</h3>
+                                    <form onSubmit={handleResetPassword}>
+                                        <div style={styles.inputContainer}>
+                                            <label style={styles.label}>Reset Token</label>
+                                            <input
+                                                type="text"
+                                                value={resetToken}
+                                                onChange={(e) => setResetToken(e.target.value)}
+                                                placeholder="Enter the token from your email"
+                                                required
+                                                style={styles.input}
+                                            />
+                                        </div>
+                                        <div style={styles.inputContainer}>
+                                            <label style={styles.label}>New Password</label>
+                                            <input
+                                                type={showNewPassword ? 'text' : 'password'}
+                                                value={newPassword}
+                                                onChange={(e) => setNewPassword(e.target.value)}
+                                                placeholder="Enter new password"
+                                                required
+                                                style={styles.passwordInput}
+                                            />
+                                            <span
+                                                onClick={() => setShowNewPassword(!showNewPassword)}
+                                                style={styles.eyeIcon}
+                                            >
+                                                {showNewPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+                                            </span>
+                                        </div>
+                                        <div style={styles.inputContainer}>
+                                            <label style={styles.label}>Confirm New Password</label>
+                                            <input
+                                                type={showConfirmPassword ? 'text' : 'password'}
+                                                value={confirmPassword}
+                                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                                placeholder="Confirm new password"
+                                                required
+                                                style={styles.passwordInput}
+                                            />
+                                            <span
+                                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                                style={styles.eyeIcon}
+                                            >
+                                                {showConfirmPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+                                            </span>
+                                        </div>
+                                        <div style={styles.error}>{forgotError}</div>
+                                        <button
+                                            type="submit"
+                                            style={{...styles.primaryButton, backgroundColor: '#296bd5ff'}}
+                                            disabled={forgotLoading}
                                         >
-                                            {showConfirmPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-                                        </span>
-                                    </div>
-                                    {forgotError && <p style={errorStyle}>{forgotError}</p>}
-                                    <button
-                                        type="submit"
-                                        style={signInButtonStyle}
-                                        disabled={forgotLoading}
-                                    >
-                                        {forgotLoading ? 'Resetting...' : 'Reset Password'}
-                                    </button>
-                                </form>
-                            </>
-                        )}
+                                            {forgotLoading ? 'Resetting...' : 'Reset Password'}
+                                        </button>
+                                    </form>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
