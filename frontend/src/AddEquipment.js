@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import { Form, Input, Button, Select, message, Row, Col, Card, Typography, DatePicker } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment';
+import './styles.css'; // Import common styles
+import { validateSerialNumber, validateModel } from './validation';
 
 const { Option } = Select;
 const { Title } = Typography;
@@ -48,7 +50,6 @@ const AddEquipment = () => {
             };
 
             delete finalValues.customCategory;
-
             delete finalValues.assigneeName;
             delete finalValues.position;
             delete finalValues.employeeEmail;
@@ -56,15 +57,12 @@ const AddEquipment = () => {
             delete finalValues.department;
             delete finalValues.damageDescription;
 
-            console.log("Final payload for adding equipment:", finalValues);
-
             await axios.post('http://localhost:5000/api/equipment', finalValues, { headers: getAuthHeader() });
             message.success('Equipment added successfully!');
             form.resetFields();
             setCategory('');
-            navigate('/InStockView'); // Redirect to In Stock View after successful addition
+            navigate('/InStockView');
         } catch (error) {
-            console.error("Error adding equipment:", error.response ? error.response.data : error.message);
             message.error(error.response?.data?.message || 'Failed to add equipment.');
         }
     };
@@ -76,9 +74,9 @@ const AddEquipment = () => {
     };
 
     return (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
-            <Card style={{ width: '100%', maxWidth: 1200, margin: '0' ,border: 'none',boxShadow: 'none',background: 'transparent',}} variant="outlined">
-                <Title level={3} style={{ textAlign: 'center', marginTop: '0px',marginBottom: '30px' }}>Add New Equipment</Title>
+        <div className="add-equipment-container">
+            <Card className="add-equipment-card" variant="outlined">
+                <Title level={3} className="add-equipment-title">Add New Equipment</Title>
                 <Form
                     form={form}
                     layout="vertical"
@@ -87,11 +85,9 @@ const AddEquipment = () => {
                     initialValues={{ status: 'In Stock' }}
                 >
                     <Row gutter={24}>
-                        {/* Column 1 (Left Side: Core Information fields) */}
                         <Col xs={24} lg={12}>
                             <Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>Core Information</Title>
                             <Row gutter={16}>
-                                {/* REVERTED: Col spans to 12 for two columns per row within this Card */}
                                 <Col span={12}>
                                     <Form.Item name="category" label="Category" rules={[{ required: true, message: 'Please select a category!' }]} style={{ marginBottom: 12 }}>
                                         <Select placeholder="Select a category">
@@ -111,9 +107,8 @@ const AddEquipment = () => {
                                         </Select>
                                     </Form.Item>
                                 </Col>
-                                {/* Conditional custom category field */}
                                 {category === 'Other' && (
-                                    <Col span={24}> {/* Custom category always takes full width of its sub-section for readability */}
+                                    <Col span={24}>
                                         <Form.Item name="customCategory" label="Custom Category Name" rules={[{ required: true, message: 'Please enter a custom category name!' }]} style={{ marginBottom: 12 }}>
                                             <Input placeholder="e.g., Docking Station" />
                                         </Form.Item>
@@ -125,24 +120,21 @@ const AddEquipment = () => {
                                         label="Purchase Price (INR)"
                                         style={{ marginBottom: 12 }}
                                     >
-                                        <Input type="number"  placeholder="e.g., 25000.00" className="hide-number-arrows" />
+                                        <Input type="number" placeholder="e.g., 25000.00" className="hide-number-arrows" />
                                     </Form.Item>
                                 </Col>
                                 <Col span={12}>
-                                    <Form.Item name="purchaseDate" label="Date of Purchase" rules={[{ required: true, message: 'Please select purchase date!' }]} style={{ marginBottom: 12 }}>
+                                    <Form.Item name="purchaseDate" label="Date of Purchase" rules={[{ required: false}]} style={{ marginBottom: 12 }}>
                                         <DatePicker style={{ width: '100%' }} />
                                     </Form.Item>
                                 </Col>
                             </Row>
                         </Col>
-
-                        {/* Column 2 (Right Side: Hardware & Warranty Details fields) */}
                         <Col xs={24} lg={12}>
                             <Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>Hardware & Warranty Details</Title>
                             <Row gutter={16}>
-                                {/* REVERTED: Col spans to 12 for two columns per row within this Card */}
-                                <Col span={12}><Form.Item name="model" label="Model / Brand" rules={[{ required: true, message: 'Please enter model/brand!' }]} style={{ marginBottom: 12 }}><Input placeholder="e.g., Dell Latitude 5420" /></Form.Item></Col>
-                                <Col span={12}><Form.Item name="serialNumber" label="Serial Number" rules={[{ required: true, message: 'Please enter serial number!' }]} style={{ marginBottom: 12 }}><Input placeholder="Enter serial number" /></Form.Item></Col>
+                                <Col span={12}><Form.Item name="model" label="Model / Brand" rules={[{ validator: validateModel }]} style={{ marginBottom: 12 }}><Input placeholder="e.g., Dell Latitude 5420" /></Form.Item></Col>
+                                <Col span={12}><Form.Item name="serialNumber" label="Serial Number" rules={[{ validator: validateSerialNumber }]} style={{ marginBottom: 12 }}><Input placeholder="Enter serial number" /></Form.Item></Col>
                                 <Col span={12}>
                                     <Form.Item name="location" label="Location" rules={[{ required: true, message: 'Please select a location!' }]} style={{ marginBottom: 12 }}>
                                         <Select placeholder="Select Location">
@@ -158,12 +150,9 @@ const AddEquipment = () => {
                             </Row>
                         </Col>
                     </Row>
-
-                    {/* Additional Comments (Full Width Below 2 Columns) */}
                     <Form.Item name="comment" label="Additional Comments" style={{ marginTop: 8, marginBottom: 0 }}>
                         <Input.TextArea rows={3} placeholder="Any other relevant details..." />
                     </Form.Item>
-
                     <Form.Item style={{ textAlign: 'center', marginTop: 16, marginBottom: 0 }}>
                         <Button type="primary" htmlType="submit" size="large" style={{ width: '50%' }}>
                             Add Equipment

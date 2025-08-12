@@ -14,33 +14,42 @@ import {
   Tag,
   Typography,
   Table,
+  Select,
+  DatePicker,
 } from 'antd';
 import {
   WarningOutlined,
   DeleteOutlined,
   EyeOutlined,
-  EditOutlined,
   MoreOutlined,
   InfoCircleOutlined,
   UserAddOutlined,
+  EditOutlined
 } from '@ant-design/icons';
 import moment from 'moment';
+import './styles.css';
 
 const { Text, Title } = Typography;
+const { Option } = Select;
 
-// Helper for auth header
+const categoryOptions = [
+  'Laptop', 'Headset', 'Keyboard', 'Mouse', 'Monitor', 'Other'
+];
+const locationOptions = [
+  'Bangalore', 'Mangalore', 'Hyderabad', 'USA', 'Canada'
+];
+
 const getAuthHeader = () => {
   const token = localStorage.getItem('token');
   return token ? { 'x-auth-token': token } : {};
 };
 
-// Render warranty tag with color indicators
 const renderWarrantyTag = (date) => {
   if (!date) return <Text disabled>N/A</Text>;
   const warrantyDate = moment(date, 'YYYY-MM-DD');
   if (!warrantyDate.isValid()) return <Text disabled>Invalid Date</Text>;
   const today = moment();
-  const thirtyDaysFromNow = moment().add(30, 'days');
+  const thirtyDaysFromNow = today.clone().add(30, 'days');
   if (warrantyDate.isBefore(today)) {
     return <Tag color="error">Expired: {warrantyDate.format('DD MMM YYYY')}</Tag>;
   }
@@ -50,7 +59,6 @@ const renderWarrantyTag = (date) => {
   return warrantyDate.format('DD MMM YYYY');
 };
 
-// Group assets by model
 const groupAssetsByModel = (assets) => {
   const grouped = assets.reduce((acc, asset) => {
     const modelKey = asset.model || 'Unknown Model';
@@ -68,14 +76,13 @@ const groupAssetsByModel = (assets) => {
 };
 
 const InStockView = ({ user }) => {
-  // State for asset data and UI
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [groupedList, setGroupedList] = useState([]);
   const [assetForInfoDetails, setAssetForInfoDetails] = useState(null);
 
-  // Modal and form states
+  // Modal/form states
   const [isAssignModalVisible, setIsAssignModalVisible] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState(null);
   const [form] = Form.useForm();
@@ -87,8 +94,23 @@ const InStockView = ({ user }) => {
   const [isModelAssetsModalVisible, setIsModelAssetsModalVisible] = useState(false);
   const [selectedModelAssets, setSelectedModelAssets] = useState(null);
 
-  // State controlling external Popconfirm for status changes
   const [confirmationConfig, setConfirmationConfig] = useState(null);
+  const [isAnyModalOpen, setIsAnyModalOpen] = useState(false);
+
+  // Edit Modal
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [selectedEditAsset, setSelectedEditAsset] = useState(null);
+  const [editForm] = Form.useForm();
+
+  useEffect(() => {
+    setIsAnyModalOpen(
+      isAssignModalVisible ||
+      isDetailsModalVisible ||
+      isModelAssetsModalVisible ||
+      isEditModalVisible ||
+      (confirmationConfig && confirmationConfig.visible)
+    );
+  }, [isAssignModalVisible, isDetailsModalVisible, isModelAssetsModalVisible, isEditModalVisible, confirmationConfig]);
 
   // Fetch in-stock assets from API
   const fetchInStockAssets = useCallback(async () => {
@@ -105,9 +127,7 @@ const InStockView = ({ user }) => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchInStockAssets();
-  }, [fetchInStockAssets]);
+  useEffect(() => { fetchInStockAssets(); }, [fetchInStockAssets]);
 
   // Filter assets based on search input
   const handleSearch = (e) => {
@@ -121,18 +141,15 @@ const InStockView = ({ user }) => {
     setFilteredData(filtered);
   };
 
-  // Update grouped list whenever filteredData changes
   useEffect(() => {
     setGroupedList(groupAssetsByModel(filteredData));
   }, [filteredData]);
 
-  // When clicking on a grouped row 'View' icon, open modal showing nested assets
   const handleViewModelAssets = (record) => {
     setSelectedModelAssets(record);
     setIsModelAssetsModalVisible(true);
   };
 
-  // Handle assign modal open
   const handleAssignClick = (record) => {
     setSelectedEquipment(record);
     form.resetFields();
@@ -140,7 +157,6 @@ const InStockView = ({ user }) => {
     setConfirmationConfig(null);
   };
 
-  // Submit assignment form
   const handleAssignSubmit = async () => {
     try {
       const values = await form.validateFields();
@@ -152,63 +168,73 @@ const InStockView = ({ user }) => {
       );
       message.success('Asset assigned successfully!');
       setIsAssignModalVisible(false);
-      fetchInStockAssets();
+      window.location.reload();
     } catch (error) {
       message.error('Assignment failed. Please check the details.');
       console.error(error);
     }
   };
 
-  // Show details modal
   const handleViewDetails = (record) => {
     setAssetForInfoDetails(record);
     setDetailsEquipment(record);
     setIsDetailsModalVisible(true);
   };
 
-  // Show confirmation popup for status changes
-  const confirmStatusChange = (record, newStatus, fetchDataCallback) => {
-    setConfirmationConfig({
-      visible: true,
-      title: `Move asset "${record.model} (${record.serialNumber})" to ${newStatus}?`,
-      onConfirm: async () => {
-        try {
-          await axios.put(
-            `http://localhost:5000/api/equipment/${record._id}`,
-            { status: newStatus },
-            { headers: getAuthHeader() }
-          );
-          message.success(`Moved to ${newStatus}`);
-          setConfirmationConfig(null);
-          if (fetchDataCallback) fetchDataCallback();
-        } catch (err) {
-          message.error(`Failed to update status to ${newStatus}`);
-          setConfirmationConfig(null);
-          console.error(err);
-        }
-      },
-      onCancel: () => setConfirmationConfig(null),
-    });
+  const handleMoveStatus = async (record, newStatus) => {
+    try {
+      await axios.put(
+        `http://localhost:5000/api/equipment/${record._id}`,
+        { status: newStatus },
+        { headers: getAuthHeader() }
+      );
+      message.success(`Moved to ${newStatus}`);
+      window.location.reload();
+    } catch (error) {
+      message.error(`Failed to update status to ${newStatus}`);
+      console.error(error);
+    }
   };
 
-  // Render actions for individual assets in nested modal
+  // == Edit Section ==
+  const handleEditAsset = (record) => {
+    setSelectedEditAsset(record);
+    editForm.setFieldsValue({
+      ...record,
+      purchaseDate: record.purchaseDate ? moment(record.purchaseDate) : null,
+      warrantyInfo: record.warrantyInfo ? moment(record.warrantyInfo) : null,
+    });
+    setIsEditModalVisible(true);
+  };
+
+  const handleSaveAssetEdit = async () => {
+    try {
+      const values = await editForm.validateFields();
+
+      const updatedAsset = { ...values };
+      if (updatedAsset.purchaseDate)
+        updatedAsset.purchaseDate = moment(updatedAsset.purchaseDate).format('YYYY-MM-DD');
+      if (updatedAsset.warrantyInfo)
+        updatedAsset.warrantyInfo = moment(updatedAsset.warrantyInfo).format('YYYY-MM-DD');
+      updatedAsset.status = "In Stock"; // Prevent editing status!
+
+      await axios.put(
+        `http://localhost:5000/api/equipment/${selectedEditAsset._id}`,
+        updatedAsset,
+        { headers: getAuthHeader() }
+      );
+      message.success('Asset updated successfully!');
+      setIsEditModalVisible(false);
+      setSelectedEditAsset(null);
+      editForm.resetFields();
+      window.location.reload();
+    } catch (error) {
+      message.error('Asset update failed. Please check details.');
+    }
+  };
+
   const renderInStockActions = (record) => {
     const isViewer = user?.role === 'Viewer';
-
-    const handleMoveStatus = async (record, newStatus) => {
-      try {
-        await axios.put(
-          `http://localhost:5000/api/equipment/${record._id}`,
-          { status: newStatus },
-          { headers: getAuthHeader() }
-        );
-        message.success(`Moved to ${newStatus}`);
-        fetchInStockAssets();
-      } catch (error) {
-        message.error(`Failed to update status to ${newStatus}`);
-        console.error(error);
-      }
-    };
 
     const menuItems = [
       {
@@ -222,7 +248,7 @@ const InStockView = ({ user }) => {
             placement="top"
             disabled={isViewer}
           >
-            <span style={{ color: 'red', pointerEvents: isViewer ? 'none' : undefined, opacity: isViewer ? 0.5 : 1 }}>
+            <span className="danger-action">
               <WarningOutlined /> Move to Damaged
             </span>
           </Popconfirm>
@@ -240,7 +266,7 @@ const InStockView = ({ user }) => {
             placement="top"
             disabled={isViewer}
           >
-            <span style={{ color: '#8B572A', pointerEvents: isViewer ? 'none' : undefined, opacity: isViewer ? 0.5 : 1 }}>
+            <span className="ewaste-action">
               <DeleteOutlined /> Move to E-Waste
             </span>
           </Popconfirm>
@@ -253,25 +279,31 @@ const InStockView = ({ user }) => {
       <Space>
         <Button
           type="text"
-          icon={<InfoCircleOutlined style={{ color: '#1890ff', fontSize: '18px' }} />}
+          icon={<InfoCircleOutlined className="icon-info" />}
           onClick={() => handleViewDetails(record)}
           title="View Details"
         />
         <Button
           type="text"
-          icon={<UserAddOutlined style={{ fontSize: '18px' }} />}
+          icon={<UserAddOutlined className="icon-assign" />}
           onClick={() => handleAssignClick(record)}
           title="Assign"
           disabled={isViewer}
         />
+        <Button
+          type="text"
+          icon={<EditOutlined className="icon-edit" />}
+          onClick={() => handleEditAsset(record)}
+          title="Edit"
+          disabled={isViewer}
+        />
         <Dropdown menu={{ items: menuItems }} trigger={['click']} disabled={isViewer}>
-          <Button type="text" icon={<MoreOutlined style={{ fontSize: '20px' }} />} disabled={isViewer} />
+          <Button type="text" icon={<MoreOutlined className="icon-more" />} disabled={isViewer} />
         </Dropdown>
       </Space>
     );
   };
 
-  // Columns of main grouped table by model
   const columns = [
     {
       title: 'Sl No',
@@ -293,7 +325,7 @@ const InStockView = ({ user }) => {
       render: (_, record) => (
         <Button
           type="link"
-          icon={<EyeOutlined style={{ color: 'blue', fontSize: '18px' }} />}
+          icon={<EyeOutlined className="icon-view" />}
           onClick={() => handleViewModelAssets(record)}
           title="View Assets"
         />
@@ -301,7 +333,6 @@ const InStockView = ({ user }) => {
     },
   ];
 
-  // Columns of nested asset table inside modal
   const modelAssetListColumns = [
     {
       title: 'Sl No',
@@ -331,32 +362,31 @@ const InStockView = ({ user }) => {
 
   return (
     <>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Col>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            In-Stock Equipment
-          </Typography.Title>
-        </Col>
-        <Col>
-          <Input.Search
-            placeholder="Search all fields..."
-            value={searchTerm}
-            onChange={handleSearch}
-            allowClear
-            style={{ width: 300 }}
-          />
-        </Col>
-      </Row>
+      <div className="page-header">
+        <Typography.Title level={4} className="instock-title">
+          In-Stock Equipment
+        </Typography.Title>
+        <Input.Search
+          className="instock-search-input"
+          placeholder="Search all fields..."
+          value={searchTerm}
+          onChange={handleSearch}
+          allowClear
+        />
+      </div>
 
-      <Table
-        columns={columns}
-        dataSource={groupedList}
-        rowKey="model"
-        pagination={{ pageSize: 10 }}
-        scroll={{ x: 'max-content' }}
-      />
+      {/* Table with BLUR effect if any modal/popconfirm is open */}
+      <div className={isAnyModalOpen ? "instock-blur" : ""}>
+        <Table
+          columns={columns}
+          dataSource={groupedList}
+          rowKey="model"
+          pagination={{ pageSize: 10 }}
+          scroll={{ x: 'max-content' }}
+        />
+      </div>
 
-      {/* Modal for nested assets of selected model */}
+      {/* --- Modals --- */}
       <Modal
         title={`Assets under Model: ${selectedModelAssets?.model || ''}`}
         open={isModelAssetsModalVisible}
@@ -439,6 +469,82 @@ const InStockView = ({ user }) => {
         </Form>
       </Modal>
 
+      {/* Edit Modal */}
+      <Modal
+        title={`Edit: ${selectedEditAsset?.model || ''}`}
+        open={isEditModalVisible}
+        onOk={handleSaveAssetEdit}
+        onCancel={() => { setIsEditModalVisible(false); setSelectedEditAsset(null); editForm.resetFields(); }}
+        okText="Save"
+        destroyOnClose
+        okButtonProps={{ disabled: user?.role === "Viewer" }}
+        cancelButtonProps={{ disabled: user?.role === "Viewer" }}
+        width={700}
+        centered
+      >
+        <Form layout="vertical" form={editForm}>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="model" label="Model" rules={[{ required: true }]}>
+                <Input disabled={user?.role === "Viewer"} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="category" label="Category" rules={[{ required: true }]}>
+                <Select disabled={user?.role === "Viewer"}>
+                  {categoryOptions.map(opt => <Option key={opt} value={opt}>{opt}</Option>)}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="serialNumber" label="Serial Number" rules={[{ required: true }]}>
+                <Input disabled={user?.role === "Viewer"} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="status" label="Status">
+                <Input value="In Stock" disabled />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="location" label="Location" rules={[{ required: true }]}>
+                <Select disabled={user?.role === "Viewer"}>
+                  {locationOptions.map(opt => <Option key={opt} value={opt}>{opt}</Option>)}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="purchasePrice" label="Purchase Price">
+                <Input disabled={user?.role === "Viewer"} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="purchaseDate" label="Purchase Date">
+                <DatePicker style={{ width: "100%" }} disabled={user?.role === "Viewer"} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="warrantyInfo" label="Warranty Expiry">
+                <DatePicker style={{ width: "100%" }} disabled={user?.role === "Viewer"} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.Item name="comment" label="Comment">
+                <Input.TextArea rows={2} disabled={user?.role === "Viewer"} />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
+      </Modal>
+
       {/* Details Modal */}
       <Modal
         title={`Equipment Details: ${detailsEquipment?.model || ''}`}
@@ -450,7 +556,7 @@ const InStockView = ({ user }) => {
       >
         {assetForInfoDetails && (
           <Form form={infoForm} layout="vertical">
-            <Title level={5} style={{ marginTop: 0, marginBottom: 16 }}>Hardware & General Information</Title>
+            <Title level={5} className="hardware-section-title">Hardware & General Information</Title>
             <Row gutter={16}>
               <Col span={6}><Form.Item label="Asset ID"><Input value={assetForInfoDetails.assetId || 'N/A'} readOnly /></Form.Item></Col>
               <Col span={6}><Form.Item label="Category"><Input value={assetForInfoDetails.category || 'N/A'} readOnly /></Form.Item></Col>
@@ -466,8 +572,7 @@ const InStockView = ({ user }) => {
                 <Input value={assetForInfoDetails.warrantyInfo ? moment(assetForInfoDetails.warrantyInfo).format('DD MMM YYYY') : 'N/A'} readOnly />
               </Form.Item></Col>
             </Row>
-
-            <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>Assignee & Contact Information</Title>
+            <Title level={5} className="assignee-section-title">Assignee & Contact Information</Title>
             <Row gutter={16}>
               <Col span={6}><Form.Item label="Assignee Name"><Input value={assetForInfoDetails.assigneeName || 'N/A'} readOnly /></Form.Item></Col>
               <Col span={6}><Form.Item label="Position"><Input value={assetForInfoDetails.position || 'N/A'} readOnly /></Form.Item></Col>
@@ -475,8 +580,7 @@ const InStockView = ({ user }) => {
               <Col span={6}><Form.Item label="Phone Number"><Input value={assetForInfoDetails.phoneNumber || 'N/A'} readOnly /></Form.Item></Col>
               <Col span={6}><Form.Item label="Department"><Input value={assetForInfoDetails.department || 'N/A'} readOnly /></Form.Item></Col>
             </Row>
-
-            <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>Comments & Audit Trail</Title>
+            <Title level={5} className="comments-section-title">Comments & Audit Trail</Title>
             <Row gutter={16}>
               {assetForInfoDetails.damageDescription && (
                 <Col span={12}>
@@ -497,7 +601,6 @@ const InStockView = ({ user }) => {
         )}
       </Modal>
 
-      {/* External Popconfirm for status change */}
       {confirmationConfig && (
         <Popconfirm
           title={confirmationConfig.title}
@@ -508,7 +611,6 @@ const InStockView = ({ user }) => {
           cancelText="No"
           placement="top"
         >
-          {/* Dummy element required for Popconfirm */}
           <span style={{ display: 'none' }} />
         </Popconfirm>
       )}

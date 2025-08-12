@@ -351,16 +351,18 @@ app.delete('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) =>
         if (req.params.id === req.user.id) {
             return res.status(400).json({ msg: 'Cannot delete your own account' });
         }
-        const deletedUser = await User.findByIdAndRemove(req.params.id);
+        // Use the correct Mongoose delete method
+        const deletedUser = await User.findByIdAndDelete(req.params.id)
         if (!deletedUser) {
             return res.status(404).json({ msg: 'User not found' });
         }
         res.json({ msg: 'User deleted' });
-    } catch (err) { 
-        console.error(err.message); 
-        res.status(500).send('Server Error'); 
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
     }
 });
+
 
 // --- Equipment Endpoints (REORDERED FOR SPECIFICITY) ---
 

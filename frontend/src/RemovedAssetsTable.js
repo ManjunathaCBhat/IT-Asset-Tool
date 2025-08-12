@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Table, Spin, Alert, Typography, Input, Space, Tag } from 'antd';
 import axios from 'axios';
 import moment from 'moment';
+import './styles.css'; // Import your unified/app-wide styles
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -136,23 +137,34 @@ const RemovedAssetsTable = () => {
 
     return (
         <Spin spinning={loading} size="large" tip="Loading removed assets...">
-            <div style={{ padding: '20px' }}>
-                {error && <Alert message="Error" description={error} type="error" showIcon style={{ marginBottom: 16 }} />}
-                <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                    <Title level={3}>Removed Assets -</Title>
-                    <div style={{ marginTop: 14, marginLeft: 1, color: '#888', fontSize: 14 }}>
+            <div className="removed-assets-container">
+                {error && (
+                    <Alert
+                        message="Error"
+                        description={error}
+                        type="error"
+                        showIcon
+                        className="removed-assets-alert"
+                    />
+                )}
+
+                <Space className="removed-assets-header">
+                    <Title level={3} className="removed-assets-title">Removed Assets -</Title>
+                    <div className="removed-assets-description">
                         Implies the asset has left the organization's control, either through sale, donation, or disposal.
                     </div>
                     <Search
+                        className="removed-assets-search-input"
                         placeholder="Search removed assets..."
                         onSearch={handleSearch}
-                        onChange={(e) => handleSearch(e.target.value)}
+                        onChange={e => handleSearch(e.target.value)}
                         value={searchText}
                         allowClear
-                        style={{ width: 300 }}
                     />
                 </Space>
+
                 <Table
+                    className="removed-assets-table"
                     columns={columns}
                     dataSource={filteredRemovedAssets}
                     rowKey="_id"
