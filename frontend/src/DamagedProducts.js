@@ -7,27 +7,14 @@ import {
   SearchOutlined, EyeOutlined, InfoCircleOutlined, RollbackOutlined, DeleteOutlined
 } from '@ant-design/icons';
 import moment from 'moment';
+import './styles.css'; // <-- Import your common styles
 
 const { Title } = Typography;
 
-// Blur effect for modal open
-const inlineStyles = (
-  <style>
-    {`
-    .instock-blur {
-      filter: blur(3px);
-      pointer-events: none;
-      user-select: none;
-      transition: filter 0.15s;
-    }
-    `}
-  </style>
-);
-
-// Info modal asset table
+// Info modal asset table (style removed)
 const InfoTable = ({ asset }) => (
   <Table
-    style={{ margin: 0, marginBottom: 20 }}
+    className="asset-info-table"
     bordered
     dataSource={[
       ['Asset ID', asset.assetId || 'N/A'],
@@ -78,14 +65,10 @@ const DamagedProducts = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [modalAssetsVisible, setModalAssetsVisible] = useState(false);
   const [selectedModelAssets, setSelectedModelAssets] = useState(null);
-
   const [assetForInfo, setAssetForInfo] = useState(null);
-
-  // For custom repaired confirmation modal:
   const [assetToRepair, setAssetToRepair] = useState(null);
   const [repairConfirmVisible, setRepairConfirmVisible] = useState(false);
 
-  // Pagination state
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -139,7 +122,6 @@ const DamagedProducts = ({ user }) => {
     setAssetToRepair(asset);
     setRepairConfirmVisible(true);
   };
-  // On confirm, HARD reload
   const handleRepairConfirm = async () => {
     if (!assetToRepair) return;
     try {
@@ -151,7 +133,7 @@ const DamagedProducts = ({ user }) => {
       message.success('Asset marked as repaired.');
       setRepairConfirmVisible(false);
       setAssetToRepair(null);
-      window.location.reload(); // HARD reload
+      window.location.reload();
     } catch {
       message.error('Failed to mark as repaired.');
     }
@@ -161,7 +143,7 @@ const DamagedProducts = ({ user }) => {
     setRepairConfirmVisible(false);
   };
 
-  // Delete (to 'Removed'), HARD reload
+  // Delete (to 'Removed')
   const handleDelete = async (asset) => {
     try {
       await axios.put(
@@ -170,7 +152,7 @@ const DamagedProducts = ({ user }) => {
         { headers: getAuthHeader() }
       );
       message.success('Asset moved to Removed.');
-      window.location.reload(); // HARD reload
+      window.location.reload();
     } catch {
       message.error('Failed to move to Removed.');
     }
@@ -276,9 +258,9 @@ const DamagedProducts = ({ user }) => {
 
   return (
     <>
-      {inlineStyles}
+      {/* Blur overlay is now in CSS */}
       <div className={modalAssetsVisible ? "instock-blur" : ""}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div className="damaged-header">
           <Title level={4} style={{ margin: 0 }}>Damaged Products</Title>
           <Input
             placeholder="Search all fields..."
@@ -304,6 +286,7 @@ const DamagedProducts = ({ user }) => {
         />
       </div>
 
+      {/* Modal: Damaged assets for a model */}
       <Modal
         title={`Damaged Assets: ${selectedModelAssets?.model || ''}`}
         open={modalAssetsVisible}
@@ -317,6 +300,7 @@ const DamagedProducts = ({ user }) => {
       >
         {selectedModelAssets && (
           <Table
+            className="damaged-modal-table"
             dataSource={selectedModelAssets.assets}
             rowKey="_id"
             pagination={false}
@@ -327,7 +311,7 @@ const DamagedProducts = ({ user }) => {
         )}
       </Modal>
 
-      {/* Info Modal for asset details */}
+      {/* Info asset modal */}
       <Modal
         open={!!assetForInfo}
         title={`Asset Details (${assetForInfo?.model || ''})`}
@@ -344,7 +328,7 @@ const DamagedProducts = ({ user }) => {
         )}
       </Modal>
 
-      {/* Repaired confirmation modal with a table layout */}
+      {/* Repair confirmation modal */}
       <Modal
         open={repairConfirmVisible}
         title="Confirm Asset Repair"

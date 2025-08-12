@@ -66,7 +66,7 @@ const summarizeByCategory = (assets) => {
 
     // Explicitly add desired categories to ensure they always show up, even with 0 items.
     // ADDED 'Keyboard' to desiredCategories
-    const desiredCategories = ['Laptop', 'Headset', 'Mouse', 'Monitor', 'Keyboard',];
+    const desiredCategories = ['Laptop', 'Headset', 'Mouse', 'Monitor', 'Keyboard'];
     desiredCategories.forEach(cat => {
         if (!categorySummary[cat]) {
             categorySummary[cat] = {

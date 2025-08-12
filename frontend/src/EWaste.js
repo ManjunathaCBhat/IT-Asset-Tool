@@ -3,6 +3,8 @@ import axios from 'axios';
 import { Table, Typography, message, Input, Space, Popconfirm, Button } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import moment from 'moment';
+import './styles.css'; // Import CSS with your layout styles
+// import { validateSearchText } from './validation'; // Use if you want custom search validation
 
 const { Title } = Typography;
 const { Search } = Input;
@@ -42,6 +44,11 @@ const EWaste = ({ user }) => {
 
     const onSearch = (value) => {
         setSearchText(value);
+        // Optional: validate the search text before filtering
+        // if (!validateSearchText(value)) {
+        //     message.warning("Please enter only letters, numbers and spaces.");
+        //     return;
+        // }
         const filtered = data.filter((item) =>
             item.category?.toLowerCase().includes(value.toLowerCase()) ||
             item.model?.toLowerCase().includes(value.toLowerCase()) ||
@@ -60,7 +67,6 @@ const EWaste = ({ user }) => {
         });
     };
 
-    // --- Delete (Move to Removed) ---
     const handleDelete = async (record) => {
         try {
             await axios.put(`http://localhost:5000/api/equipment/${record._id}`, {
@@ -86,26 +92,10 @@ const EWaste = ({ user }) => {
             ),
             width: 70,
         },
-        {
-            title: 'Category',
-            dataIndex: 'category',
-            key: 'category',
-        },
-        {
-            title: 'Model',
-            dataIndex: 'model',
-            key: 'model',
-        },
-        {
-            title: 'Serial Number',
-            dataIndex: 'serialNumber',
-            key: 'serialNumber',
-        },
-        {
-            title: 'Comment',
-            dataIndex: 'comment',
-            key: 'comment',
-        },
+        { title: 'Category', dataIndex: 'category', key: 'category' },
+        { title: 'Model', dataIndex: 'model', key: 'model' },
+        { title: 'Serial Number', dataIndex: 'serialNumber', key: 'serialNumber' },
+        { title: 'Comment', dataIndex: 'comment', key: 'comment' },
         {
             title: 'Action',
             key: 'action',
@@ -134,15 +124,15 @@ const EWaste = ({ user }) => {
 
     return (
         <>
-            <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+            <Space className="ewaste-header">
                 <Title level={4}>E-Waste Assets</Title>
                 <Search
+                    className="ewaste-search-input"
                     placeholder="Search"
                     onSearch={onSearch}
                     onChange={(e) => onSearch(e.target.value)}
                     value={searchText}
                     allowClear
-                    style={{ width: 200 }}
                 />
             </Space>
             <Table

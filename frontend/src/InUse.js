@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import axios from 'axios';
 import { Table, Tag, Typography, Modal, Button, Space, Form, Input, message, Dropdown, Popconfirm, Menu, DatePicker, Row, Col, Select } from 'antd';
+import axios from 'axios';
 import {
   EyeOutlined,
   MoreOutlined,
@@ -12,44 +12,11 @@ import {
   SearchOutlined
 } from '@ant-design/icons';
 import moment from 'moment';
+import './styles.css';
+import { validateEmail, validatePhoneNumber } from './validation';
 
 const { Title } = Typography;
 const { Option } = Select;
-
-const colorBorderStyle = (
-  <style>
-    {`
-    .instock-blur {
-      filter: blur(4px);
-      pointer-events: none;
-      user-select: none;
-      transition: filter 0.3s;
-    }
-    .asset-info-table .ant-table-wrapper .ant-table {
-      border: 1px solid #ececec;
-      border-radius: 5px;
-    }
-    .asset-info-table .ant-table-cell,
-    .asset-info-table .ant-table-thead > tr > th,
-    .asset-info-table .ant-table-tbody > tr > td {
-      border: 1px solid #ececec !important;
-      padding: 4px 8px;
-      background: #fff;
-      font-size: 13px;
-      color: #222;
-    }
-    .asset-info-table .ant-table-thead > tr > th {
-      background-color: #fafcff;
-      color: #222;
-      font-weight: 600;
-    }
-    .asset-info-table .ant-table-tbody > tr > td {
-      font-size: 13px !important;
-      padding: 4px 8px !important;
-    }
-    `}
-  </style>
-);
 
 const getStatusColor = (status) => ({
   'In Use': '#7ED321',
@@ -64,7 +31,7 @@ const renderWarrantyTag = (date) => {
   const warrantyDate = moment(date);
   if (!warrantyDate.isValid()) return 'Invalid Date';
   const today = moment();
-  const thirtyDays = moment().add(30, 'days');
+  const thirtyDays = today.clone().add(30, 'days');
   if (warrantyDate.isBefore(today, 'day')) {
     return <Tag color="error">Expired: {warrantyDate.format('DD MMM YYYY')}</Tag>;
   }
@@ -144,144 +111,13 @@ const InUse = ({ user }) => {
 
   const [isAnyModalOpen, setIsAnyModalOpen] = useState(false);
 
-  const fetchInUseAssets = useCallback(async () => {
-    try {
-      const response = await axios.get('http://localhost:5000/api/equipment', { headers: getAuthHeader() });
-      const inUseAssets = response.data.filter((item) => item.status === 'In Use');
-      setData(inUseAssets);
-      setFilteredData(inUseAssets);
-    } catch (error) {
-      message.error('Failed to fetch In Use assets.');
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchInUseAssets();
-  }, [fetchInUseAssets]);
-
-  useEffect(() => {
-    setIsAnyModalOpen(isEditModalVisible || modalVisible || isInfoModalVisible || !!returnPopupVisible);
-  }, [isEditModalVisible, modalVisible, isInfoModalVisible, returnPopupVisible]);
-
-  const handleSearch = (e) => {
-    const value = e.target.value;
-    setSearchTerm(value);
-    const filtered = data.filter((item) =>
-      Object.values(item).some((field) => String(field).toLowerCase().includes(value.toLowerCase()))
-    );
-    setFilteredData(filtered);
-    setPagination(prev => ({ ...prev, current: 1 }));
-  };
-
-  const groupedList = groupAssetsByEmail(filteredData);
-
-  const handleTableChange = (pag) => {
-    setPagination(prev => ({
-      ...prev,
-      current: pag.current,
-      pageSize: pag.pageSize,
-    }));
-  };
-
-  const handleInfoDetails = (record) => {
-    setSelectedAsset(record);
-    setIsInfoModalVisible(true);
-  };
-  const handleEdit = (record) => {
-    setSelectedAsset(record);
-    editForm.setFieldsValue({
-      ...record,
-      warrantyInfo: record.warrantyInfo ? moment(record.warrantyInfo) : null,
-      purchaseDate: record.purchaseDate ? moment(record.purchaseDate) : null,
-    });
-    setIsEditModalVisible(true);
-  };
-
-  const handleSaveEditView = async () => {
-    try {
-      const values = await editForm.validateFields();
-      const updatedAsset = { ...values };
-      if (updatedAsset.warrantyInfo) {
-        updatedAsset.warrantyInfo = moment(updatedAsset.warrantyInfo).format('YYYY-MM-DD');
-      }
-      if (updatedAsset.purchaseDate) {
-        updatedAsset.purchaseDate = moment(updatedAsset.purchaseDate).format('YYYY-MM-DD');
-      }
-      const payloadToSend = {
-        category: updatedAsset.category,
-        model: updatedAsset.model,
-        serialNumber: updatedAsset.serialNumber,
-        warrantyInfo: updatedAsset.warrantyInfo,
-        location: updatedAsset.location,
-        comment: updatedAsset.comment,
-        assigneeName: updatedAsset.assigneeName,
-        position: updatedAsset.position,
-        employeeEmail: updatedAsset.employeeEmail,
-        phoneNumber: updatedAsset.phoneNumber,
-        department: updatedAsset.department,
-        damageDescription: updatedAsset.status === 'Damaged' ? updatedAsset.damageDescription : null,
-        purchaseDate: updatedAsset.purchaseDate,
-        status: updatedAsset.status,
-        purchasePrice: updatedAsset.purchasePrice,
-      };
-      for (const k of ['assigneeName','position','employeeEmail','phoneNumber','department','comment','damageDescription'])
-        if (payloadToSend[k] === "") payloadToSend[k] = null;
-
-      await axios.put(
-        `http://localhost:5000/api/equipment/${selectedAsset._id}`,
-        payloadToSend,
-        { headers: getAuthHeader() }
-      );
-      message.success('Asset updated successfully.');
-      setIsEditModalVisible(false);
-      setSelectedAsset(null);
-      editForm.resetFields();
-      window.location.reload(); // <--- HARD RELOAD HERE
-    } catch (error) {
-      message.error('Failed to update asset.');
-    }
-  };
-
-  const handleReturnClick = (record) => {
-    setReturningAsset(record);
-    setReturnPopupVisible(record._id);
-  };
-  const handleReturnCancel = () => {
-    setReturnPopupVisible('');
-    setReturningAsset(null);
-  };
-  const handleReturnConfirm = async () => {
-    if (returningAsset) {
-      await handleMoveStatus(returningAsset, 'In Stock');
-      setReturnPopupVisible('');
-      setReturningAsset(null);
-    }
-  };
-
-  const handleMoveStatus = async (record, newStatus) => {
-    try {
-      await axios.put(
-        `http://localhost:5000/api/equipment/${record._id}`,
-        { status: newStatus },
-        { headers: getAuthHeader() }
-      );
-      message.success(`Moved to ${newStatus}`);
-      setModalVisible(false);
-      setIsEditModalVisible(false);
-      setIsInfoModalVisible(false);
-      fetchInUseAssets();
-    } catch (error) {
-      message.error(`Failed to update status to ${newStatus}`);
-    }
-  };
-
-  const getSerialNumber = (i) => (pagination.current - 1) * pagination.pageSize + i + 1;
+  // Main table columns for the grouped by employeeEmail table
   const columns = [
     {
       title: 'Sl No',
       key: 'slno',
       fixed: 'left',
-      render: (_, __, i) => getSerialNumber(i),
+      render: (_, __, i) => (pagination.current - 1) * pagination.pageSize + i + 1,
       width: 70,
     },
     {
@@ -318,7 +154,7 @@ const InUse = ({ user }) => {
       render: (_, record) => (
         <Button
           type="link"
-          icon={<EyeOutlined style={{ color: 'blue', fontSize: '18px' }} />}
+          icon={<EyeOutlined className="icon-view" />}
           onClick={() => {
             setSelectedEmployeeAssets(record);
             setModalVisible(true);
@@ -328,6 +164,7 @@ const InUse = ({ user }) => {
     },
   ];
 
+  // Columns for the nested employee asset modal table
   const employeeAssetListColumns = [
     { title: 'Sl No', key: 'nestedSlNo', render: (_, __, i) => i + 1, width: 60 },
     { title: 'Model', dataIndex: 'model', key: 'model' },
@@ -395,13 +232,13 @@ const InUse = ({ user }) => {
             </Modal>
             <Button
               type="text"
-              icon={<InfoCircleOutlined style={{ fontSize: 20, color: '#1890ff' }} />}
+              icon={<InfoCircleOutlined className="icon-info" />}
               onClick={() => handleInfoDetails(record)}
               title="View Full Details"
             />
             <Button
               type="text"
-              icon={<EditOutlined style={{ fontSize: 20 }} />}
+              icon={<EditOutlined className="icon-edit" />}
               onClick={() => handleEdit(record)}
               title="Edit"
               disabled={isViewer}
@@ -418,11 +255,7 @@ const InUse = ({ user }) => {
                       placement="top"
                       disabled={isViewer}
                     >
-                      <span style={{
-                        color: 'red',
-                        pointerEvents: isViewer ? 'none' : undefined,
-                        opacity: isViewer ? 0.5 : 1
-                      }}>
+                      <span className="danger-action">
                         <DamagedIcon /> Move to Damaged
                       </span>
                     </Popconfirm>
@@ -436,11 +269,7 @@ const InUse = ({ user }) => {
                       placement="top"
                       disabled={isViewer}
                     >
-                      <span style={{
-                        color: '#8B572A',
-                        pointerEvents: isViewer ? 'none' : undefined,
-                        opacity: isViewer ? 0.5 : 1
-                      }}>
+                      <span className="ewaste-action">
                         <EWasteIcon /> Move to E-Waste
                       </span>
                     </Popconfirm>
@@ -451,7 +280,7 @@ const InUse = ({ user }) => {
               placement="bottomRight"
               disabled={isViewer}
             >
-              <Button type="text" icon={<MoreOutlined />} disabled={isViewer} />
+              <Button type="text" icon={<MoreOutlined className="icon-more" />} disabled={isViewer} />
             </Dropdown>
           </Space>
         );
@@ -459,17 +288,151 @@ const InUse = ({ user }) => {
     },
   ];
 
+  const fetchInUseAssets = useCallback(async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/api/equipment', { headers: getAuthHeader() });
+      const inUseAssets = response.data.filter((item) => item.status === 'In Use');
+      setData(inUseAssets);
+      setFilteredData(inUseAssets);
+    } catch (error) {
+      message.error('Failed to fetch In Use assets.');
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchInUseAssets();
+  }, [fetchInUseAssets]);
+
+  useEffect(() => {
+    setIsAnyModalOpen(isEditModalVisible || modalVisible || isInfoModalVisible || !!returnPopupVisible);
+  }, [isEditModalVisible, modalVisible, isInfoModalVisible, returnPopupVisible]);
+
+  const handleSearch = (e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    const filtered = data.filter((item) =>
+      Object.values(item).some((field) => String(field).toLowerCase().includes(value.toLowerCase()))
+    );
+    setFilteredData(filtered);
+    setPagination(prev => ({ ...prev, current: 1 }));
+  };
+
+  const handleTableChange = (pag) => {
+    setPagination(prev => ({
+      ...prev,
+      current: pag.current,
+      pageSize: pag.pageSize,
+    }));
+  };
+
+  const groupedList = groupAssetsByEmail(filteredData);
+
+  // ===== Asset and modal logic =====
+
+  const handleInfoDetails = (record) => {
+    setSelectedAsset(record);
+    setIsInfoModalVisible(true);
+  };
+  const handleEdit = (record) => {
+    setSelectedAsset(record);
+    editForm.setFieldsValue({
+      ...record,
+      warrantyInfo: record.warrantyInfo ? moment(record.warrantyInfo) : null,
+      purchaseDate: record.purchaseDate ? moment(record.purchaseDate) : null,
+    });
+    setIsEditModalVisible(true);
+  };
+
+  const handleSaveEditView = async () => {
+    try {
+      const values = await editForm.validateFields();
+      const updatedAsset = { ...values };
+      if (updatedAsset.warrantyInfo) {
+        updatedAsset.warrantyInfo = moment(updatedAsset.warrantyInfo).format('YYYY-MM-DD');
+      }
+      if (updatedAsset.purchaseDate) {
+        updatedAsset.purchaseDate = moment(updatedAsset.purchaseDate).format('YYYY-MM-DD');
+      }
+      const payloadToSend = {
+        category: updatedAsset.category,
+        model: updatedAsset.model,
+        serialNumber: updatedAsset.serialNumber,
+        warrantyInfo: updatedAsset.warrantyInfo,
+        location: updatedAsset.location,
+        comment: updatedAsset.comment,
+        assigneeName: updatedAsset.assigneeName,
+        position: updatedAsset.position,
+        employeeEmail: updatedAsset.employeeEmail,
+        phoneNumber: updatedAsset.phoneNumber,
+        department: updatedAsset.department,
+        damageDescription: updatedAsset.status === 'Damaged' ? updatedAsset.damageDescription : null,
+        purchaseDate: updatedAsset.purchaseDate,
+        status: updatedAsset.status,
+        purchasePrice: updatedAsset.purchasePrice,
+      };
+      for (const k of ['assigneeName','position','employeeEmail','phoneNumber','department','comment','damageDescription'])
+        if (payloadToSend[k] === "") payloadToSend[k] = null;
+
+      await axios.put(
+        `http://localhost:5000/api/equipment/${selectedAsset._id}`,
+        payloadToSend,
+        { headers: getAuthHeader() }
+      );
+      message.success('Asset updated successfully.');
+      setIsEditModalVisible(false);
+      setSelectedAsset(null);
+      editForm.resetFields();
+      window.location.reload();
+    } catch (error) {
+      message.error('Failed to update asset.');
+    }
+  };
+
+  // Return to stock modals
+  const handleReturnClick = (record) => {
+    setReturningAsset(record);
+    setReturnPopupVisible(record._id);
+  };
+  const handleReturnCancel = () => {
+    setReturnPopupVisible('');
+    setReturningAsset(null);
+  };
+  const handleReturnConfirm = async () => {
+    if (returningAsset) {
+      await handleMoveStatus(returningAsset, 'In Stock');
+      setReturnPopupVisible('');
+      setReturningAsset(null);
+    }
+  };
+
+  const handleMoveStatus = async (record, newStatus) => {
+    try {
+      await axios.put(
+        `http://localhost:5000/api/equipment/${record._id}`,
+        { status: newStatus },
+        { headers: getAuthHeader() }
+      );
+      message.success(`Moved to ${newStatus}`);
+      setModalVisible(false);
+      setIsEditModalVisible(false);
+      setIsInfoModalVisible(false);
+      fetchInUseAssets();
+    } catch (error) {
+      message.error(`Failed to update status to ${newStatus}`);
+    }
+  };
+
+  // ===== Render ======
   return (
     <>
-      {colorBorderStyle}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>In Use Equipment</Title>
+      <div className="page-header">
+        <Title level={4} className="inuse-title">In Use Equipment</Title>
         <Input
+          className="inuse-search-input"
           placeholder="Search all fields..."
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={handleSearch}
-          style={{ width: 250 }}
           allowClear
         />
       </div>
@@ -489,6 +452,7 @@ const InUse = ({ user }) => {
         />
       </div>
 
+      {/* Grouped asset modal */}
       <Modal
         title={`Assets assigned to ${selectedEmployeeAssets ? selectedEmployeeAssets.assigneeName : ''}`}
         open={modalVisible}
@@ -540,7 +504,6 @@ const InUse = ({ user }) => {
       >
         {selectedAsset && (
           <Form form={editForm} layout="vertical">
-            <Typography.Title level={5} style={{ fontSize: '14px', marginTop: 0, marginBottom: 4 }}>Asset Information</Typography.Title>
             <Row gutter={12}>
               <Col span={12}><Form.Item label="Model" name="model" rules={[{ required: true }]}><Input /></Form.Item></Col>
               <Col span={12}><Form.Item label="Category" name="category" rules={[{ required: true }]}><Select>{categoryOptions.map(opt => <Option key={opt} value={opt}>{opt}</Option>)}</Select></Form.Item></Col>
@@ -560,14 +523,22 @@ const InUse = ({ user }) => {
             <Typography.Title level={5} style={{ fontSize: '14px', marginTop: 20, marginBottom: 8 }}>Assignee Details</Typography.Title>
             <Row gutter={12}>
               <Col span={12}><Form.Item label="Assignee Name" name="assigneeName" rules={[{ required: true }]}><Input /></Form.Item></Col>
-              <Col span={12}><Form.Item label="Employee Email" name="employeeEmail" rules={[{ required: true, type: 'email' }]}><Input /></Form.Item></Col>
+              <Col span={12}>
+                <Form.Item label="Employee Email" name="employeeEmail" rules={[{ required: true }, { validator: validateEmail }]}>
+                  <Input />
+                </Form.Item>
+              </Col>
             </Row>
             <Row gutter={12}>
               <Col span={12}><Form.Item label="Position" name="position" rules={[{ required: true }]}><Input /></Form.Item></Col>
               <Col span={12}><Form.Item label="Department" name="department" rules={[{ required: true }]}><Input /></Form.Item></Col>
             </Row>
             <Row gutter={12}>
-              <Col span={12}><Form.Item label="Phone" name="phoneNumber" rules={[{ required: true }]}><Input /></Form.Item></Col>
+              <Col span={12}>
+                <Form.Item label="Phone" name="phoneNumber" rules={[{ required: true }, { validator: validatePhoneNumber }]}>
+                  <Input />
+                </Form.Item>
+              </Col>
             </Row>
           </Form>
         )}
@@ -587,7 +558,7 @@ const InUse = ({ user }) => {
       >
         {selectedAsset && (
           <div>
-            <Typography.Title level={5} style={{ marginBottom: 12, fontSize: '14px' }}>Asset Information</Typography.Title>
+            <Typography.Title level={5} className="asset-info-title">Asset Information</Typography.Title>
             <Table
               bordered
               size="small"
@@ -602,7 +573,7 @@ const InUse = ({ user }) => {
               ]}
               style={{ marginBottom: 18 }}
             />
-            <Typography.Title level={5} style={{ marginBottom: 12, fontSize: '14px' }}>Assignee Details</Typography.Title>
+            <Typography.Title level={5} className="asset-info-title">Assignee Details</Typography.Title>
             <Table
               bordered
               size="small"
@@ -619,6 +590,7 @@ const InUse = ({ user }) => {
           </div>
         )}
       </Modal>
+      {/* ...return modal and other logic as you had */}
     </>
   );
 };

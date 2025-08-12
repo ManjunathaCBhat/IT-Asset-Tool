@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Table, Button, Modal, Form, Input, Select, message, Card, Typography, Popconfirm, Space } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import axios from 'axios';
+import './styles.css';  // Import your shared styles
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -138,11 +139,8 @@ const UserManagement = () => {
 
     return (
         <Card>
-            <div style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                marginBottom: 16, flexWrap: 'wrap', gap: 8
-            }}>
-                <Title level={4} style={{ margin: 0 }}>User Management</Title>
+            <div className="user-header">
+                <Title level={4} className="user-title">User Management</Title>
                 <Button type="primary" icon={<PlusOutlined />} onClick={showAddUserModal}>
                     Add User
                 </Button>
@@ -152,7 +150,7 @@ const UserManagement = () => {
                 dataSource={users}
                 rowKey="_id"
                 pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: ['10', '20', '50', '100'] }}
-                style={{ width: '100%', minWidth: 300 }}
+                className="user-table"
             />
 
             {/* Add User Modal */}
@@ -161,7 +159,7 @@ const UserManagement = () => {
                 open={isModalVisible}
                 onCancel={handleCancel}
                 footer={null}
-                destroyOnHidden
+                destroyOnClose
             >
                 <Form form={form} layout="vertical" onFinish={handleAddUser}>
                     <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
@@ -195,7 +193,7 @@ const UserManagement = () => {
                 onOk={handleEditRole}
                 okText="Save"
                 cancelText="Cancel"
-                destroyOnHidden
+                destroyOnClose
             >
                 {editModal.user && (
                     <Form
