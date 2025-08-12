@@ -26,12 +26,23 @@ const getStatusColor = (status) => ({
   Removed: '#555555'
 }[status] || 'default');
 
+// Updated renderWarrantyTag function with better date handling
 const renderWarrantyTag = (date) => {
   if (!date) return 'N/A';
-  const warrantyDate = moment(date);
+  
+  // Handle both string and moment object inputs
+  let warrantyDate;
+  if (moment.isMoment(date)) {
+    warrantyDate = date;
+  } else {
+    warrantyDate = moment(date);
+  }
+  
   if (!warrantyDate.isValid()) return 'Invalid Date';
+  
   const today = moment();
   const thirtyDays = today.clone().add(30, 'days');
+  
   if (warrantyDate.isBefore(today, 'day')) {
     return <Tag color="error">Expired: {warrantyDate.format('DD MMM YYYY')}</Tag>;
   }
@@ -86,6 +97,19 @@ const assigneeRows = asset => [
   ['Phone Number', asset.phoneNumber || 'N/A'],
   ['Department', asset.department || 'N/A'],
 ];
+
+// Helper function for date formatting
+const formatDateForStorage = (date) => {
+  if (!date) return null;
+  if (moment.isMoment(date)) {
+    return date.format('YYYY-MM-DD');
+  }
+  if (typeof date === 'string' || date instanceof Date) {
+    const momentDate = moment(date);
+    return momentDate.isValid() ? momentDate.format('YYYY-MM-DD') : null;
+  }
+  return null;
+};
 
 const InUse = ({ user }) => {
   const [data, setData] = useState([]);
@@ -333,57 +357,124 @@ const InUse = ({ user }) => {
     setSelectedAsset(record);
     setIsInfoModalVisible(true);
   };
+
+  // Updated handleEdit function with better date handling and debugging
   const handleEdit = (record) => {
+    console.log('Original record warranty info:', record.warrantyInfo);
     setSelectedAsset(record);
-    editForm.setFieldsValue({
+    
+    // Properly convert date strings back to moment objects for the form
+    const formValues = {
       ...record,
       warrantyInfo: record.warrantyInfo ? moment(record.warrantyInfo) : null,
       purchaseDate: record.purchaseDate ? moment(record.purchaseDate) : null,
-    });
+    };
+    
+    console.log('Form values being set:', formValues);
+    console.log('Warranty info moment object:', formValues.warrantyInfo);
+    
+    editForm.setFieldsValue(formValues);
     setIsEditModalVisible(true);
   };
 
+  // Updated handleSaveEditView function with comprehensive debugging and robust date handling
   const handleSaveEditView = async () => {
     try {
       const values = await editForm.validateFields();
-      const updatedAsset = { ...values };
-      if (updatedAsset.warrantyInfo) {
-        updatedAsset.warrantyInfo = moment(updatedAsset.warrantyInfo).format('YYYY-MM-DD');
-      }
-      if (updatedAsset.purchaseDate) {
-        updatedAsset.purchaseDate = moment(updatedAsset.purchaseDate).format('YYYY-MM-DD');
-      }
+      console.log('Raw form values:', values);
+      console.log('Warranty info from form:', values.warrantyInfo);
+      console.log('Is warranty info a moment object?', moment.isMoment(values.warrantyInfo));
+      
+      // Create payload with proper date formatting
       const payloadToSend = {
-        category: updatedAsset.category,
-        model: updatedAsset.model,
-        serialNumber: updatedAsset.serialNumber,
-        warrantyInfo: updatedAsset.warrantyInfo,
-        location: updatedAsset.location,
-        comment: updatedAsset.comment,
-        assigneeName: updatedAsset.assigneeName,
-        position: updatedAsset.position,
-        employeeEmail: updatedAsset.employeeEmail,
-        phoneNumber: updatedAsset.phoneNumber,
-        department: updatedAsset.department,
-        damageDescription: updatedAsset.status === 'Damaged' ? updatedAsset.damageDescription : null,
-        purchaseDate: updatedAsset.purchaseDate,
-        status: updatedAsset.status,
-        purchasePrice: updatedAsset.purchasePrice,
+        category: values.category,
+        model: values.model,
+        serialNumber: values.serialNumber,
+        location: values.location,
+        comment: values.comment || null,
+        assigneeName: values.assigneeName,
+        position: values.position,
+        employeeEmail: values.employeeEmail,
+        phoneNumber: values.phoneNumber,
+        department: values.department,
+        status: values.status,
+        purchasePrice: values.purchasePrice || null,
+        damageDescription: values.status === 'Damaged' ? values.damageDescription : null,
       };
-      for (const k of ['assigneeName','position','employeeEmail','phoneNumber','department','comment','damageDescription'])
-        if (payloadToSend[k] === "") payloadToSend[k] = null;
 
-      await axios.put(
+      // Handle warranty date - multiple format checks with extensive logging
+      if (values.warrantyInfo) {
+        if (moment.isMoment(values.warrantyInfo)) {
+          payloadToSend.warrantyInfo = values.warrantyInfo.format('YYYY-MM-DD');
+          console.log('Formatted warranty (from moment):', payloadToSend.warrantyInfo);
+        } else if (typeof values.warrantyInfo === 'string') {
+          const momentDate = moment(values.warrantyInfo);
+          if (momentDate.isValid()) {
+            payloadToSend.warrantyInfo = momentDate.format('YYYY-MM-DD');
+            console.log('Formatted warranty (from string):', payloadToSend.warrantyInfo);
+          } else {
+            console.error('Invalid date string:', values.warrantyInfo);
+            payloadToSend.warrantyInfo = null;
+          }
+        } else {
+          // Try to convert whatever it is to moment
+          const momentDate = moment(values.warrantyInfo);
+          if (momentDate.isValid()) {
+            payloadToSend.warrantyInfo = momentDate.format('YYYY-MM-DD');
+            console.log('Formatted warranty (fallback):', payloadToSend.warrantyInfo);
+          } else {
+            console.error('Could not parse warranty date:', values.warrantyInfo);
+            payloadToSend.warrantyInfo = null;
+          }
+        }
+      } else {
+        payloadToSend.warrantyInfo = null;
+      }
+
+      // Handle purchase date
+      if (values.purchaseDate) {
+        if (moment.isMoment(values.purchaseDate)) {
+          payloadToSend.purchaseDate = values.purchaseDate.format('YYYY-MM-DD');
+        } else {
+          const momentDate = moment(values.purchaseDate);
+          if (momentDate.isValid()) {
+            payloadToSend.purchaseDate = momentDate.format('YYYY-MM-DD');
+          } else {
+            payloadToSend.purchaseDate = null;
+          }
+        }
+      } else {
+        payloadToSend.purchaseDate = null;
+      }
+
+      // Clean up empty string values
+      Object.keys(payloadToSend).forEach(key => {
+        if (payloadToSend[key] === "") {
+          payloadToSend[key] = null;
+        }
+      });
+
+      console.log('Final payload being sent:', payloadToSend);
+      console.log('Warranty info in payload:', payloadToSend.warrantyInfo);
+
+      const response = await axios.put(
         `http://localhost:5000/api/equipment/${selectedAsset._id}`,
         payloadToSend,
         { headers: getAuthHeader() }
       );
+      
+      console.log('Server response:', response.data);
+      
       message.success('Asset updated successfully.');
       setIsEditModalVisible(false);
       setSelectedAsset(null);
       editForm.resetFields();
-      window.location.reload();
+      
+      // Refresh the data instead of reloading the page
+      await fetchInUseAssets();
     } catch (error) {
+      console.error('Failed to update asset:', error);
+      console.error('Error response:', error.response?.data);
       message.error('Failed to update asset.');
     }
   };
@@ -393,10 +484,12 @@ const InUse = ({ user }) => {
     setReturningAsset(record);
     setReturnPopupVisible(record._id);
   };
+
   const handleReturnCancel = () => {
     setReturnPopupVisible('');
     setReturningAsset(null);
   };
+
   const handleReturnConfirm = async () => {
     if (returningAsset) {
       await handleMoveStatus(returningAsset, 'In Stock');
@@ -590,7 +683,6 @@ const InUse = ({ user }) => {
           </div>
         )}
       </Modal>
-      {/* ...return modal and other logic as you had */}
     </>
   );
 };
