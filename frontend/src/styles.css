@@ -271,3 +271,11 @@
 .hide-number-arrows input[type="number"] {
   -moz-appearance: textfield;
 }
+
+
+.add-equipment-container {
+  min-height: 50vh;              /* Full viewport height for vertical centering */
+  display: flex;
+  align-items: center;            /* Vertical center */
+  justify-content: center;        /* Horizontal center */
+}

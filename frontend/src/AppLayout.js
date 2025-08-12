@@ -187,25 +187,25 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
                             <BellOutlined style={{ fontSize: '20px', cursor: 'pointer' }} />
                         </Badge>
                     </Popover>
-                    
+
                     {/* Avatar with Role Below */}
                     <Dropdown menu={{ items: getUserMenuItems() }} placement="bottomRight">
-                        <div style={{ 
-                            display: 'flex', 
-                            flexDirection: 'column', 
-                            alignItems: 'center', 
-                            cursor: 'pointer' 
+                        <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            cursor: 'pointer'
                         }}>
                             <Avatar
-                               
+
                                 style={{ backgroundColor: '#1890ff' }}
                                 icon={user?.name ? null : <UserOutlined />}
                             >
                                 {user?.name ? user.name.charAt(0).toUpperCase() : null}
                             </Avatar>
-                            <Text style={{ 
-                                fontSize: '11px', 
-                                color: '#666', 
+                            <Text style={{
+                                fontSize: '11px',
+                                color: '#666',
                                 marginTop: '2px',
                                 textAlign: 'center'
                             }}>

@@ -61,7 +61,7 @@ const sendResetEmail = async (email, resetToken) => {
     try {
         console.log('Attempting to send email to:', email);
         console.log('From email:', process.env.SENDGRID_FROM_EMAIL);
-        
+
         const result = await sgMail.send(msg);
         console.log('Email sent successfully:', result[0].statusCode);
         return { success: true };
@@ -76,15 +76,25 @@ const sendResetEmail = async (email, resetToken) => {
     }
 };
 
-// --- Mongoose Schemas ---
 const UserSchema = new mongoose.Schema({
+    name: {
+        type: String,
+        required: true,        // Make it mandatory for new user documents
+        minlength: 2,          // Optional: minimum length
+        maxlength: 100         // Optional: maximum length
+    },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     role: { type: String, enum: ['Admin', 'Editor', 'Viewer'], default: 'Viewer' },
-    // UNCOMMENTED these fields for password reset functionality
     resetPasswordToken: String,
     resetPasswordExpires: Date
 });
+
+app.use((err, req, res, next) => {
+  console.error(err.stack); // log full error to console for debugging
+  res.status(500).json({ message: "Internal Server Error", error: err.message });
+});
+
 
 const EquipmentSchema = new mongoose.Schema({
     assetId: { type: String, required: true, unique: true },
@@ -113,6 +123,8 @@ const EquipmentSchema = new mongoose.Schema({
 const User = mongoose.model('User', UserSchema);
 const Equipment = mongoose.model('Equipment', EquipmentSchema);
 
+
+
 // --- Function to Seed First Admin User ---
 const seedAdminUser = async () => {
     const ADMIN_EMAIL = 'admin@example.com';
@@ -121,6 +133,7 @@ const seedAdminUser = async () => {
         if (!adminExists) {
             console.log(`No user found with email ${ADMIN_EMAIL}. Creating one...`);
             const admin = new User({
+               name: 'Admin',
                 email: ADMIN_EMAIL,
                 password: 'password123',
                 role: 'Admin'
@@ -181,11 +194,11 @@ app.get('/test-sendgrid', async (req, res) => {
             subject: 'SendGrid Test',
             text: 'Testing SendGrid connection from server'
         };
-        
+
         console.log('Testing SendGrid with:');
         console.log('To:', msg.to);
         console.log('From:', msg.from);
-        
+
         await sgMail.send(msg);
         res.json({ success: true, message: 'Test email sent successfully!' });
     } catch (error) {
@@ -207,9 +220,9 @@ app.post('/api/users/login', async (req, res) => {
             if (err) throw err;
             res.json({ token, user: payload.user });
         });
-    } catch (err) { 
-        console.error(err.message); 
-        res.status(500).send('Server error'); 
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server error');
     }
 });
 
@@ -221,9 +234,9 @@ app.post('/api/forgot-password', async (req, res) => {
     try {
         const user = await User.findOne({ email });
         if (!user) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'No account found with that email address.' 
+            return res.status(404).json({
+                success: false,
+                message: 'No account found with that email address.'
             });
         }
 
@@ -237,24 +250,24 @@ app.post('/api/forgot-password', async (req, res) => {
 
         // Send email
         const emailResult = await sendResetEmail(email, resetToken);
-        
+
         if (emailResult.success) {
-            res.json({ 
-                success: true, 
-                message: 'Password reset email sent successfully.' 
+            res.json({
+                success: true,
+                message: 'Password reset email sent successfully.'
             });
         } else {
-            res.status(500).json({ 
-                success: false, 
-                message: 'Failed to send reset email. Please try again later.' 
+            res.status(500).json({
+                success: false,
+                message: 'Failed to send reset email. Please try again later.'
             });
         }
 
     } catch (err) {
         console.error('Forgot password error:', err);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Server error occurred.' 
+        res.status(500).json({
+            success: false,
+            message: 'Server error occurred.'
         });
     }
 });
@@ -271,9 +284,9 @@ app.post('/api/reset-password', async (req, res) => {
         });
 
         if (!user) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Password reset token is invalid or has expired.' 
+            return res.status(400).json({
+                success: false,
+                message: 'Password reset token is invalid or has expired.'
             });
         }
 
@@ -286,15 +299,15 @@ app.post('/api/reset-password', async (req, res) => {
 
         await user.save();
 
-        res.json({ 
-            success: true, 
-            message: 'Password has been reset successfully.' 
+        res.json({
+            success: true,
+            message: 'Password has been reset successfully.'
         });
     } catch (err) {
         console.error('Reset password error:', err.message);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Failed to reset password.' 
+        res.status(500).json({
+            success: false,
+            message: 'Failed to reset password.'
         });
     }
 });
@@ -303,48 +316,64 @@ app.get('/api/users', [auth, requireRole(['Admin'])], async (req, res) => {
     try {
         const users = await User.find().select('-password');
         res.json(users);
-    } catch (err) { 
-        console.error(err.message); 
-        res.status(500).send('Server Error'); 
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
     }
 });
 
 app.post('/api/users/create', [auth, requireRole(['Admin'])], async (req, res) => {
-    const { email, password, role } = req.body;
+    const { name, email, password, role } = req.body;  // <-- add name here
     try {
         let user = await User.findOne({ email });
         if (user) return res.status(400).json({ msg: 'User already exists' });
-        user = new User({ email, password, role });
+        user = new User({ name, email, password, role });  // <-- add name here
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(password, salt);
         await user.save();
         res.json({ msg: 'User created successfully' });
-    } catch (err) { 
-        console.error(err.message); 
-        res.status(500).send('Server Error'); 
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
     }
 });
 
+
 // --- UPDATE USER ROLE ENDPOINT (ADDED) ---
+// --- UPDATE USER ENDPOINT (ALL FIELDS, PASSWORD OPTIONAL, HASHED) ---
 app.put('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) => {
     try {
-        const { role } = req.body;
+        const { name, email, role, password } = req.body;
+
+        const updateFields = {};
+        if (name !== undefined) updateFields.name = name;
+        if (email !== undefined) updateFields.email = email;
+        if (role !== undefined) updateFields.role = role;
+        if (password && password.trim().length > 0) {
+            const salt = await bcrypt.genSalt(10);
+            updateFields.password = await bcrypt.hash(password, salt);
+        }
+
         const updatedUser = await User.findByIdAndUpdate(
             req.params.id,
-            { role },
-            { new: true }
+            updateFields,
+            { new: true, runValidators: true }
         ).select('-password');
-        
+
         if (!updatedUser) {
             return res.status(404).json({ msg: 'User not found' });
         }
-        
+
         res.json({ msg: 'User updated successfully', user: updatedUser });
-    } catch (err) { 
-        console.error(err.message); 
-        res.status(500).send('Server Error'); 
+    } catch (err) {
+        if (err.code === 11000) {
+            // Duplicate email, unique key constraint
+            return res.status(400).json({ msg: 'Email already in use' });
+        }
+        res.status(500).json({ msg: 'Server Error', error: err.message });
     }
 });
+
 
 app.delete('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) => {
     try {
