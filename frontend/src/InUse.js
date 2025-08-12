@@ -13,7 +13,6 @@ import {
 } from '@ant-design/icons';
 import moment from 'moment';
 import './styles.css';
-import { validateEmail, validatePhoneNumber } from './validation';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -120,37 +119,12 @@ const InUse = ({ user }) => {
       render: (_, __, i) => (pagination.current - 1) * pagination.pageSize + i + 1,
       width: 70,
     },
-    {
-      title: 'Assignee',
-      dataIndex: 'assigneeName',
-      key: 'assigneeName',
-      sorter: (a, b) => (a.assigneeName || '').localeCompare(b.assigneeName || ''),
-    },
-    {
-      title: 'Email',
-      dataIndex: 'employeeEmail',
-      key: 'employeeEmail',
-    },
-    {
-      title: 'Phone',
-      dataIndex: 'phoneNumber',
-      key: 'phoneNumber',
-    },
-    {
-      title: 'Department',
-      dataIndex: 'department',
-      key: 'department',
-      sorter: (a, b) => (a.department || '').localeCompare(b.department || ''),
-    },
-    {
-      title: 'Asset Count',
-      key: 'assetCount',
-      render: (_, record) => record.assets.length,
-      sorter: (a, b) => a.assets.length - b.assets.length,
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
+    { title: 'Assignee', dataIndex: 'assigneeName', key: 'assigneeName', sorter: (a, b) => (a.assigneeName || '').localeCompare(b.assigneeName || '') },
+    { title: 'Email', dataIndex: 'employeeEmail', key: 'employeeEmail' },
+    { title: 'Phone', dataIndex: 'phoneNumber', key: 'phoneNumber' },
+    { title: 'Department', dataIndex: 'department', key: 'department', sorter: (a, b) => (a.department || '').localeCompare(b.department || '') },
+    { title: 'Asset Count', key: 'assetCount', render: (_, record) => record.assets.length, sorter: (a, b) => a.assets.length - b.assets.length },
+    { title: 'Actions', key: 'actions',
       render: (_, record) => (
         <Button
           type="link"
@@ -347,11 +321,12 @@ const InUse = ({ user }) => {
     try {
       const values = await editForm.validateFields();
       const updatedAsset = { ...values };
-      if (updatedAsset.warrantyInfo) {
-        updatedAsset.warrantyInfo = moment(updatedAsset.warrantyInfo).format('YYYY-MM-DD');
+      // Only format if Moment object
+      if (updatedAsset.warrantyInfo && moment.isMoment(updatedAsset.warrantyInfo)) {
+        updatedAsset.warrantyInfo = updatedAsset.warrantyInfo.format('YYYY-MM-DD');
       }
-      if (updatedAsset.purchaseDate) {
-        updatedAsset.purchaseDate = moment(updatedAsset.purchaseDate).format('YYYY-MM-DD');
+      if (updatedAsset.purchaseDate && moment.isMoment(updatedAsset.purchaseDate)) {
+        updatedAsset.purchaseDate = updatedAsset.purchaseDate.format('YYYY-MM-DD');
       }
       const payloadToSend = {
         category: updatedAsset.category,
@@ -367,7 +342,7 @@ const InUse = ({ user }) => {
         department: updatedAsset.department,
         damageDescription: updatedAsset.status === 'Damaged' ? updatedAsset.damageDescription : null,
         purchaseDate: updatedAsset.purchaseDate,
-        status: updatedAsset.status,
+        status: updatedAsset.status,  // Still included, but see below (disabled in modal)
         purchasePrice: updatedAsset.purchasePrice,
       };
       for (const k of ['assigneeName','position','employeeEmail','phoneNumber','department','comment','damageDescription'])
@@ -510,7 +485,15 @@ const InUse = ({ user }) => {
             </Row>
             <Row gutter={12}>
               <Col span={12}><Form.Item label="Serial Number" name="serialNumber" rules={[{ required: true }]}><Input /></Form.Item></Col>
-              <Col span={12}><Form.Item label="Status" name="status" rules={[{ required: true }]}><Select>{statusOptions.map(opt => <Option key={opt} value={opt}>{opt}</Option>)}</Select></Form.Item></Col>
+              <Col span={12}>
+                <Form.Item label="Status" name="status"
+                  rules={[{ required: true }]}
+                >
+                  <Select disabled /* Block status changing here! */>
+                    {statusOptions.map(opt => <Option key={opt} value={opt}>{opt}</Option>)}
+                  </Select>
+                </Form.Item>
+              </Col>
             </Row>
             <Row gutter={12}>
               <Col span={12}><Form.Item label="Location" name="location" rules={[{ required: true }]}><Select>{locationOptions.map(opt => <Option key={opt} value={opt}>{opt}</Option>)}</Select></Form.Item></Col>
@@ -524,7 +507,7 @@ const InUse = ({ user }) => {
             <Row gutter={12}>
               <Col span={12}><Form.Item label="Assignee Name" name="assigneeName" rules={[{ required: true }]}><Input /></Form.Item></Col>
               <Col span={12}>
-                <Form.Item label="Employee Email" name="employeeEmail" rules={[{ required: true }, { validator: validateEmail }]}>
+                <Form.Item label="Employee Email" name="employeeEmail" rules={[{ required: true }, { type: 'email', message: 'Enter valid email' }]}>
                   <Input />
                 </Form.Item>
               </Col>
@@ -535,7 +518,7 @@ const InUse = ({ user }) => {
             </Row>
             <Row gutter={12}>
               <Col span={12}>
-                <Form.Item label="Phone" name="phoneNumber" rules={[{ required: true }, { validator: validatePhoneNumber }]}>
+                <Form.Item label="Phone" name="phoneNumber" rules={[{ required: true }]}>
                   <Input />
                 </Form.Item>
               </Col>
