@@ -1,14 +1,14 @@
-// src/AppLayout.js
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import {
     Layout, Popover, Badge, List, Typography,
-    Avatar, Dropdown, Space, Button
+    Avatar, Dropdown, Space, Button, Spin, message, Tooltip, Tag
 } from 'antd';
 import {
     PlusOutlined, DatabaseOutlined, BellOutlined, UserOutlined,
     LogoutOutlined, TeamOutlined, CheckCircleOutlined,
-    WarningOutlined, DeleteOutlined, SettingOutlined,MinusCircleOutlined, AppstoreOutlined
+    WarningOutlined, DeleteOutlined, SettingOutlined, MinusCircleOutlined, 
+    AppstoreOutlined, ReloadOutlined, ClockCircleOutlined
 } from '@ant-design/icons';
 import moment from 'moment';
 
@@ -18,15 +18,55 @@ const { Text } = Typography;
 // --- Helper for status colors (consistent across the app) ---
 const getStatusColor = (status) => {
     const colors = {
-        'Dashboard': '#4A90E2', // Blue
-        'In Use': '#7ED321', // Green
-        'In Stock': '#FA8C16', // Orange for In Stock
-        'Damaged': '#D0021B', // Red
-        'E-Waste': '#8B572A', // Brown
-        'Add Equipment': '#1890ff', // Ant Design primary blue for Add Equipment
-        'Removed': '#555555' // A neutral dark gray for removed items
+        'Dashboard': '#4A90E2',
+        'In Use': '#7ED321',
+        'In Stock': '#FA8C16',
+        'Damaged': '#D0021B',
+        'E-Waste': '#8B572A',
+        'Add Equipment': '#1890ff',
+        'Removed': '#555555'
     };
     return colors[status] || 'default';
+};
+
+// --- Helper function to get status tag color ---
+const getStatusTagColor = (status) => {
+    const statusLower = status?.toLowerCase();
+    switch (statusLower) {
+        case 'in use':
+            return 'green';
+        case 'in stock':
+            return 'orange';
+        case 'damaged':
+            return 'red';
+        case 'e-waste':
+            return 'brown';
+        case 'removed':
+            return 'default';
+        default:
+            return 'blue';
+    }
+};
+
+// --- Helper function to determine the correct route based on asset status ---
+const getAssetRoute = (item) => {
+    const status = item.status?.toLowerCase();
+    const searchParams = `search=${encodeURIComponent(item.serialNumber)}&highlight=true`;
+    
+    switch (status) {
+        case 'in use':
+            return `/in-use?${searchParams}`;
+        case 'in stock':
+            return `/in-stock?${searchParams}`;
+        case 'damaged':
+            return `/damaged?${searchParams}`;
+        case 'e-waste':
+            return `/e-waste?${searchParams}`;
+        case 'removed':
+            return `/removed?${searchParams}`;
+        default:
+            return `/in-stock?${searchParams}`;
+    }
 };
 
 // --- Logo Component ---
@@ -51,8 +91,24 @@ const Logo = () => {
     );
 };
 
-const AppLayout = ({ user, handleLogout, expiringItems }) => {
+const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, lastUpdated }) => {
     const location = useLocation();
+    const [refreshing, setRefreshing] = useState(false);
+    const [popoverVisible, setPopoverVisible] = useState(false);
+
+    // Manual refresh function
+    const handleRefreshNotifications = async (e) => {
+        e.stopPropagation();
+        setRefreshing(true);
+        try {
+            await refreshExpiringItems();
+            message.success('Notifications refreshed successfully');
+        } catch (error) {
+            message.error('Failed to refresh notifications');
+        } finally {
+            setRefreshing(false);
+        }
+    };
 
     // Define main navigation items for the top bar
     const mainNavItems = [
@@ -64,33 +120,258 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
         { key: '/removed', icon: <MinusCircleOutlined />, label: 'Removed', statusKey: 'Removed' },
     ];
 
-    // --- Popover and Dropdown Menu Content ---
+    // Enhanced notification content with status display and improved navigation
     const notificationContent = (
-        <List
-            header={<div>Warranty Alerts (Expires in 30 days)</div>}
-            dataSource={expiringItems}
-            renderItem={item => (
-                <List.Item>
-                    <List.Item.Meta
-                        title={<Link to={`/all-assets?assetId=${item.assetId}`}>{item.model} ({item.serialNumber})</Link>}
-                        description={`Expires on: ${moment(item.warrantyInfo).format('DD MMM YYYY')}`}
+        <div style={{ width: 450 }}>
+            {/* Header with refresh button */}
+            <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                padding: '12px 0 8px 0',
+                borderBottom: '1px solid #f0f0f0',
+                marginBottom: '8px',
+                position: 'sticky',
+                top: 0,
+                backgroundColor: '#fff',
+                zIndex: 1
+            }}>
+                <div>
+                    <Text strong style={{ fontSize: '14px' }}>
+                        Warranty Alerts
+                    </Text>
+                    <br />
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                        Expires within 30 days
+                    </Text>
+                </div>
+                <Tooltip title="Refresh notifications">
+                    <Button 
+                        type="text" 
+                        size="small" 
+                        icon={<ReloadOutlined />}
+                        onClick={handleRefreshNotifications}
+                        loading={refreshing}
+                        style={{ 
+                            padding: '4px 8px',
+                            display: 'flex',
+                            alignItems: 'center'
+                        }}
                     />
-                    {moment(item.warrantyInfo).isBefore(moment()) ?
-                        <Text type="danger">Expired</Text> :
-                        <Text type="warning">Expires Soon</Text>
-                    }
-                </List.Item>
-            )}
-            style={{ width: 350 }}
-            locale={{ emptyText: 'No warranty alerts.' }}
-        />
+                </Tooltip>
+            </div>
+
+            {/* Scrollable Notifications List */}
+            <div style={{ 
+                maxHeight: '320px', 
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                paddingRight: '4px',
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#d9d9d9 #f0f0f0'
+            }}>
+                <style>
+                    {`
+                        .notification-scroll::-webkit-scrollbar {
+                            width: 6px;
+                        }
+                        .notification-scroll::-webkit-scrollbar-track {
+                            background: #f0f0f0;
+                            border-radius: 3px;
+                        }
+                        .notification-scroll::-webkit-scrollbar-thumb {
+                            background: #d9d9d9;
+                            border-radius: 3px;
+                        }
+                        .notification-scroll::-webkit-scrollbar-thumb:hover {
+                            background: #bfbfbf;
+                        }
+                    `}
+                </style>
+                <div className="notification-scroll" style={{ maxHeight: '320px', overflowY: 'auto', paddingRight: '4px' }}>
+                    {expiringItems.length === 0 ? (
+                        <div style={{ 
+                            textAlign: 'center', 
+                            padding: '40px 20px',
+                            color: '#666'
+                        }}>
+                            <CheckCircleOutlined style={{ fontSize: '32px', marginBottom: '12px', color: '#52c41a' }} />
+                            <div style={{ fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+                                No warranty alerts
+                            </div>
+                            <Text type="secondary" style={{ fontSize: '12px' }}>
+                                All equipment warranties are up to date
+                            </Text>
+                        </div>
+                    ) : (
+                        <List
+                            dataSource={expiringItems}
+                            split={false}
+                            renderItem={(item, index) => {
+                                const isExpired = moment(item.warrantyInfo).isBefore(moment());
+                                const daysUntilExpiry = moment(item.warrantyInfo).diff(moment(), 'days');
+                                const assetRoute = getAssetRoute(item);
+                                
+                                return (
+                                    <List.Item 
+                                        style={{ 
+                                            padding: '12px 8px', 
+                                            borderBottom: index === expiringItems.length - 1 ? 'none' : '1px solid #f5f5f5',
+                                            margin: '0',
+                                            transition: 'background-color 0.2s ease'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fafafa'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                        <div style={{ width: '100%' }}>
+                                            <div style={{ 
+                                                display: 'flex', 
+                                                justifyContent: 'space-between',
+                                                alignItems: 'flex-start',
+                                                gap: '12px'
+                                            }}>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    {/* Model name and Status on same line */}
+                                                    <div style={{ 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        gap: '8px',
+                                                        marginBottom: '4px',
+                                                        flexWrap: 'wrap'
+                                                    }}>
+                                                        <Link 
+                                                            to={assetRoute}
+                                                            style={{ 
+                                                                fontSize: '13px',
+                                                                fontWeight: '500',
+                                                                color: '#1890ff',
+                                                                textDecoration: 'none',
+                                                                lineHeight: '1.4'
+                                                            }}
+                                                            onClick={() => {
+                                                                console.log('Navigating to:', assetRoute);
+                                                                console.log('Item:', item);
+                                                                setPopoverVisible(false);
+                                                            }}
+                                                        >
+                                                            {item.model}
+                                                        </Link>
+                                                        {item.status && (
+                                                            <Tag 
+                                                                color={getStatusTagColor(item.status)}
+                                                                style={{ 
+                                                                    fontSize: '9px',
+                                                                    padding: '2px 6px',
+                                                                    margin: 0,
+                                                                    lineHeight: '14px',
+                                                                    borderRadius: '8px',
+                                                                    fontWeight: '500'
+                                                                }}
+                                                            >
+                                                                {item.status.toUpperCase()}
+                                                            </Tag>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {/* Serial Number */}
+                                                    <div style={{ 
+                                                        fontSize: '12px', 
+                                                        color: '#666', 
+                                                        marginTop: '3px',
+                                                        lineHeight: '1.3'
+                                                    }}>
+                                                        SN: {item.serialNumber}
+                                                    </div>
+                                                    
+                                                    {/* Warranty expiration date */}
+                                                    <div style={{ 
+                                                        fontSize: '11px', 
+                                                        color: '#999', 
+                                                        marginTop: '3px',
+                                                        lineHeight: '1.3'
+                                                    }}>
+                                                        Expires: {moment(item.warrantyInfo).format('DD MMM YYYY')}
+                                                    </div>
+                                                </div>
+                                                
+                                                {/* Expiry status badge */}
+                                                <div style={{ 
+                                                    marginLeft: '8px', 
+                                                    textAlign: 'right',
+                                                    flexShrink: 0
+                                                }}>
+                                                    {isExpired ? (
+                                                        <Text 
+                                                            type="danger" 
+                                                            style={{ 
+                                                                fontSize: '10px', 
+                                                                fontWeight: '600',
+                                                                backgroundColor: '#fff2f0',
+                                                                padding: '3px 8px',
+                                                                borderRadius: '12px',
+                                                                border: '1px solid #ffccc7'
+                                                            }}
+                                                        >
+                                                            EXPIRED
+                                                        </Text>
+                                                    ) : (
+                                                        <Text 
+                                                            type="warning" 
+                                                            style={{ 
+                                                                fontSize: '10px',
+                                                                fontWeight: '600',
+                                                                backgroundColor: '#fffbe6',
+                                                                padding: '3px 8px',
+                                                                borderRadius: '12px',
+                                                                border: '1px solid #ffe58f'
+                                                            }}
+                                                        >
+                                                            {daysUntilExpiry <= 0 ? 'TODAY' : `${daysUntilExpiry}D LEFT`}
+                                                        </Text>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </List.Item>
+                                );
+                            }}
+                        />
+                    )}
+                </div>
+            </div>
+
+            {/* Footer with last updated time */}
+            <div style={{ 
+                textAlign: 'center', 
+                padding: '10px 0 8px 0',
+                borderTop: '1px solid #f0f0f0',
+                marginTop: '8px',
+                backgroundColor: '#fafafa',
+                position: 'sticky',
+                bottom: 0,
+                zIndex: 1
+            }}>
+                <Text style={{ fontSize: '10px', color: '#999' }}>
+                    <ClockCircleOutlined style={{ marginRight: '4px' }} />
+                    Last updated: {lastUpdated ? moment(lastUpdated).format('HH:mm:ss') : 'Never'}
+                </Text>
+            </div>
+        </div>
     );
 
     // Dynamic User Menu Items
     const getUserMenuItems = () => {
         const items = [
-            { key: 'user-info', label: <Text strong>{user?.name || user?.email}</Text>, disabled: true },
-            { key: 'role', label: <Text type="secondary">Role: {user?.role}</Text>, disabled: true },
+            { 
+                key: 'user-info', 
+                label: <Text strong>{user?.name || user?.email}</Text>, 
+                disabled: true 
+            },
+            { 
+                key: 'role', 
+                label: <Text type="secondary">Role: {user?.role}</Text>, 
+                disabled: true 
+            },
             { key: 'divider-1', type: 'divider' },
         ];
 
@@ -104,7 +385,12 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
 
         items.push(
             { key: 'divider-2', type: 'divider' },
-            { key: 'logout', label: 'Logout', icon: <LogoutOutlined />, onClick: handleLogout }
+            { 
+                key: 'logout', 
+                label: 'Logout', 
+                icon: <LogoutOutlined />, 
+                onClick: handleLogout 
+            }
         );
         return items;
     };
@@ -182,30 +468,61 @@ const AppLayout = ({ user, handleLogout, expiringItems }) => {
 
                 {/* Right Section: Notifications and User Profile with Role */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                    <Popover content={notificationContent} title="Notifications" trigger="click" placement="bottomRight">
-                        <Badge count={expiringItems.length}>
-                            <BellOutlined style={{ fontSize: '20px', cursor: 'pointer' }} />
-                        </Badge>
+                    <Popover 
+                        content={notificationContent} 
+                        title={null}
+                        trigger="click" 
+                        placement="bottomRight"
+                        overlayStyle={{ 
+                            maxWidth: '480px',
+                            boxShadow: '0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05)'
+                        }}
+                        open={popoverVisible}
+                        onOpenChange={setPopoverVisible}
+                    >
+                        <div style={{ position: 'relative', cursor: 'pointer' }}>
+                            <Badge 
+                                count={expiringItems.length} 
+                                size="small"
+                            >
+                                <BellOutlined 
+                                    style={{ 
+                                        fontSize: '20px', 
+                                        cursor: 'pointer'
+                                    }} 
+                                />
+                            </Badge>
+                            {refreshing && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '-2px',
+                                    right: '-2px',
+                                    width: '12px',
+                                    height: '12px'
+                                }}>
+                                    <Spin size="small" />
+                                </div>
+                            )}
+                        </div>
                     </Popover>
-                    
+
                     {/* Avatar with Role Below */}
                     <Dropdown menu={{ items: getUserMenuItems() }} placement="bottomRight">
-                        <div style={{ 
-                            display: 'flex', 
-                            flexDirection: 'column', 
-                            alignItems: 'center', 
-                            cursor: 'pointer' 
+                        <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            cursor: 'pointer'
                         }}>
                             <Avatar
-                               
                                 style={{ backgroundColor: '#1890ff' }}
                                 icon={user?.name ? null : <UserOutlined />}
                             >
                                 {user?.name ? user.name.charAt(0).toUpperCase() : null}
                             </Avatar>
-                            <Text style={{ 
-                                fontSize: '11px', 
-                                color: '#666', 
+                            <Text style={{
+                                fontSize: '11px',
+                                color: '#666',
                                 marginTop: '2px',
                                 textAlign: 'center'
                             }}>

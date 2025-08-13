@@ -263,7 +263,8 @@ const LoginPage = ({ onLogin }) => {
             });
 
             if (response.data.success) {
-                message.success('Reset token sent to your email. Please check your inbox.');
+                message.success('Reset token sent! Please check your inbox and spam folder. ' +
+        'If using a work email, contact your IT department if the email doesn\'t arrive.');
                 setForgotStep(2);
             }
         } catch (err) {

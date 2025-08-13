@@ -75,6 +75,32 @@ const groupAssetsByModel = (assets) => {
   return Object.values(grouped);
 };
 
+// ===== Helper functions for info table rows =====
+const getHardwareRows = (asset) => [
+  ['Asset ID', asset.assetId || 'N/A'],
+  ['Category', asset.category || 'N/A'],
+  ['Model', asset.model || 'N/A'],
+  ['Serial Number', asset.serialNumber || 'N/A'],
+  ['Location', asset.location || 'N/A'],
+  ['Purchase Price', asset.purchasePrice != null ? asset.purchasePrice : 'N/A'],
+  ['Status', asset.status || 'N/A'],
+  ['Purchase Date', asset.purchaseDate ? moment(asset.purchaseDate).format('YYYY-MM-DD') : 'N/A'],
+  ['Warranty Expiry', asset.warrantyInfo ? moment(asset.warrantyInfo).format('DD MMM YYYY') : 'N/A'],
+];
+const getAssigneeRows = (asset) => [
+  ['Assignee Name', asset.assigneeName || 'N/A'],
+  ['Position', asset.position || 'N/A'],
+  ['Employee Email', asset.employeeEmail || 'N/A'],
+  ['Phone Number', asset.phoneNumber || 'N/A'],
+  ['Department', asset.department || 'N/A'],
+];
+const getCommentsRows = (asset) => [
+  asset.damageDescription ? ['Damage Description', asset.damageDescription] : null,
+  ['Comment', asset.comment || 'N/A'],
+  ['Created At', asset.createdAt ? moment(asset.createdAt).format('DD MMM YYYY HH:mm') : 'N/A'],
+  ['Updated At', asset.updatedAt ? moment(asset.updatedAt).format('DD MMM YYYY HH:mm') : 'N/A'],
+].filter(Boolean);
+
 const InStockView = ({ user }) => {
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
@@ -212,10 +238,12 @@ const InStockView = ({ user }) => {
       const values = await editForm.validateFields();
 
       const updatedAsset = { ...values };
-      if (updatedAsset.purchaseDate)
-        updatedAsset.purchaseDate = moment(updatedAsset.purchaseDate).format('YYYY-MM-DD');
-      if (updatedAsset.warrantyInfo)
-        updatedAsset.warrantyInfo = moment(updatedAsset.warrantyInfo).format('YYYY-MM-DD');
+      // This is the key change:
+      if (updatedAsset.purchaseDate && moment.isMoment(updatedAsset.purchaseDate))
+        updatedAsset.purchaseDate = updatedAsset.purchaseDate.format('YYYY-MM-DD');
+      if (updatedAsset.warrantyInfo && moment.isMoment(updatedAsset.warrantyInfo))
+        updatedAsset.warrantyInfo = updatedAsset.warrantyInfo.format('YYYY-MM-DD');
+
       updatedAsset.status = "In Stock"; // Prevent editing status!
 
       await axios.put(
@@ -232,6 +260,7 @@ const InStockView = ({ user }) => {
       message.error('Asset update failed. Please check details.');
     }
   };
+
 
   const renderInStockActions = (record) => {
     const isViewer = user?.role === 'Viewer';
@@ -545,7 +574,7 @@ const InStockView = ({ user }) => {
         </Form>
       </Modal>
 
-      {/* Details Modal */}
+      {/* =========== Details Modal: TABLE BASED =========== */}
       <Modal
         title={`Equipment Details: ${detailsEquipment?.model || ''}`}
         open={isDetailsModalVisible}
@@ -555,49 +584,43 @@ const InStockView = ({ user }) => {
         centered
       >
         {assetForInfoDetails && (
-          <Form form={infoForm} layout="vertical">
-            <Title level={5} className="hardware-section-title">Hardware & General Information</Title>
-            <Row gutter={16}>
-              <Col span={6}><Form.Item label="Asset ID"><Input value={assetForInfoDetails.assetId || 'N/A'} readOnly /></Form.Item></Col>
-              <Col span={6}><Form.Item label="Category"><Input value={assetForInfoDetails.category || 'N/A'} readOnly /></Form.Item></Col>
-              <Col span={6}><Form.Item label="Model"><Input value={assetForInfoDetails.model || 'N/A'} readOnly /></Form.Item></Col>
-              <Col span={6}><Form.Item label="Serial Number"><Input value={assetForInfoDetails.serialNumber || 'N/A'} readOnly /></Form.Item></Col>
-              <Col span={6}><Form.Item label="Location"><Input value={assetForInfoDetails.location || 'N/A'} readOnly /></Form.Item></Col>
-              <Col span={6}><Form.Item label="Purchase Price"><Input value={assetForInfoDetails.purchasePrice || 'N/A'} readOnly /></Form.Item></Col>
-              <Col span={6}><Form.Item label="Status"><Input value={assetForInfoDetails.status || 'N/A'} readOnly /></Form.Item></Col>
-              <Col span={6}><Form.Item label="Purchase Date">
-                <Input value={assetForInfoDetails.purchaseDate ? moment(assetForInfoDetails.purchaseDate).format('YYYY-MM-DD') : 'N/A'} readOnly />
-              </Form.Item></Col>
-              <Col span={6}><Form.Item label="Warranty Expiry">
-                <Input value={assetForInfoDetails.warrantyInfo ? moment(assetForInfoDetails.warrantyInfo).format('DD MMM YYYY') : 'N/A'} readOnly />
-              </Form.Item></Col>
-            </Row>
-            <Title level={5} className="assignee-section-title">Assignee & Contact Information</Title>
-            <Row gutter={16}>
-              <Col span={6}><Form.Item label="Assignee Name"><Input value={assetForInfoDetails.assigneeName || 'N/A'} readOnly /></Form.Item></Col>
-              <Col span={6}><Form.Item label="Position"><Input value={assetForInfoDetails.position || 'N/A'} readOnly /></Form.Item></Col>
-              <Col span={6}><Form.Item label="Employee Email"><Input value={assetForInfoDetails.employeeEmail || 'N/A'} readOnly /></Form.Item></Col>
-              <Col span={6}><Form.Item label="Phone Number"><Input value={assetForInfoDetails.phoneNumber || 'N/A'} readOnly /></Form.Item></Col>
-              <Col span={6}><Form.Item label="Department"><Input value={assetForInfoDetails.department || 'N/A'} readOnly /></Form.Item></Col>
-            </Row>
-            <Title level={5} className="comments-section-title">Comments & Audit Trail</Title>
-            <Row gutter={16}>
-              {assetForInfoDetails.damageDescription && (
-                <Col span={12}>
-                  <Form.Item label="Damage Description">
-                    <Input.TextArea value={assetForInfoDetails.damageDescription || 'N/A'} rows={2} readOnly />
-                  </Form.Item>
-                </Col>
-              )}
-              <Col span={12}>
-                <Form.Item label="Comment">
-                  <Input.TextArea value={assetForInfoDetails.comment || 'N/A'} rows={2} readOnly />
-                </Form.Item>
-              </Col>
-              <Col span={12}><Form.Item label="Created At"><Input value={assetForInfoDetails.createdAt ? moment(assetForInfoDetails.createdAt).format('DD MMM YYYY HH:mm') : 'N/A'} readOnly /></Form.Item></Col>
-              <Col span={12}><Form.Item label="Updated At"><Input value={assetForInfoDetails.updatedAt ? moment(assetForInfoDetails.updatedAt).format('DD MMM YYYY HH:mm') : 'N/A'} readOnly /></Form.Item></Col>
-            </Row>
-          </Form>
+          <div>
+            <Title level={5} className="hardware-section-title">
+              Hardware & General Information
+            </Title>
+            <Table
+              bordered
+              size="small"
+              pagination={false}
+              showHeader={false}
+              className="asset-info-table"
+              rowClassName={() => 'small-text-row'}
+              style={{ marginBottom: 18 }}
+              dataSource={getHardwareRows(assetForInfoDetails).map(([label, value], idx) => ({ key: idx, label, value }))}
+              columns={[
+                { dataIndex: 'label', key: 'label', width: 180, render: text => <strong style={{ fontSize: '13px' }}>{text}</strong> },
+                { dataIndex: 'value', key: 'value', render: text => <span style={{ fontSize: '13px' }}>{text}</span> },
+              ]}
+            />
+
+
+            <Title level={5} className="comments-section-title">
+              Comments & Audit Trail
+            </Title>
+            <Table
+              bordered
+              size="small"
+              pagination={false}
+              showHeader={false}
+              className="asset-info-table"
+              rowClassName={() => 'small-text-row'}
+              dataSource={getCommentsRows(assetForInfoDetails).map(([label, value], idx) => ({ key: idx, label, value }))}
+              columns={[
+                { dataIndex: 'label', key: 'label', width: 180, render: text => <strong style={{ fontSize: '13px' }}>{text}</strong> },
+                { dataIndex: 'value', key: 'value', render: text => <span style={{ fontSize: '13px' }}>{text}</span> },
+              ]}
+            />
+          </div>
         )}
       </Modal>
 

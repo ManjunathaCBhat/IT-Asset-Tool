@@ -13,7 +13,6 @@ import {
 } from '@ant-design/icons';
 import moment from 'moment';
 import './styles.css';
-import { validateEmail, validatePhoneNumber } from './validation';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -26,23 +25,12 @@ const getStatusColor = (status) => ({
   Removed: '#555555'
 }[status] || 'default');
 
-// Updated renderWarrantyTag function with better date handling
 const renderWarrantyTag = (date) => {
   if (!date) return 'N/A';
-  
-  // Handle both string and moment object inputs
-  let warrantyDate;
-  if (moment.isMoment(date)) {
-    warrantyDate = date;
-  } else {
-    warrantyDate = moment(date);
-  }
-  
+  const warrantyDate = moment(date);
   if (!warrantyDate.isValid()) return 'Invalid Date';
-  
   const today = moment();
   const thirtyDays = today.clone().add(30, 'days');
-  
   if (warrantyDate.isBefore(today, 'day')) {
     return <Tag color="error">Expired: {warrantyDate.format('DD MMM YYYY')}</Tag>;
   }
@@ -98,19 +86,6 @@ const assigneeRows = asset => [
   ['Department', asset.department || 'N/A'],
 ];
 
-// Helper function for date formatting
-const formatDateForStorage = (date) => {
-  if (!date) return null;
-  if (moment.isMoment(date)) {
-    return date.format('YYYY-MM-DD');
-  }
-  if (typeof date === 'string' || date instanceof Date) {
-    const momentDate = moment(date);
-    return momentDate.isValid() ? momentDate.format('YYYY-MM-DD') : null;
-  }
-  return null;
-};
-
 const InUse = ({ user }) => {
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
@@ -144,37 +119,12 @@ const InUse = ({ user }) => {
       render: (_, __, i) => (pagination.current - 1) * pagination.pageSize + i + 1,
       width: 70,
     },
-    {
-      title: 'Assignee',
-      dataIndex: 'assigneeName',
-      key: 'assigneeName',
-      sorter: (a, b) => (a.assigneeName || '').localeCompare(b.assigneeName || ''),
-    },
-    {
-      title: 'Email',
-      dataIndex: 'employeeEmail',
-      key: 'employeeEmail',
-    },
-    {
-      title: 'Phone',
-      dataIndex: 'phoneNumber',
-      key: 'phoneNumber',
-    },
-    {
-      title: 'Department',
-      dataIndex: 'department',
-      key: 'department',
-      sorter: (a, b) => (a.department || '').localeCompare(b.department || ''),
-    },
-    {
-      title: 'Asset Count',
-      key: 'assetCount',
-      render: (_, record) => record.assets.length,
-      sorter: (a, b) => a.assets.length - b.assets.length,
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
+    { title: 'Assignee', dataIndex: 'assigneeName', key: 'assigneeName', sorter: (a, b) => (a.assigneeName || '').localeCompare(b.assigneeName || '') },
+    { title: 'Email', dataIndex: 'employeeEmail', key: 'employeeEmail' },
+    { title: 'Phone', dataIndex: 'phoneNumber', key: 'phoneNumber' },
+    { title: 'Department', dataIndex: 'department', key: 'department', sorter: (a, b) => (a.department || '').localeCompare(b.department || '') },
+    { title: 'Asset Count', key: 'assetCount', render: (_, record) => record.assets.length, sorter: (a, b) => a.assets.length - b.assets.length },
+    { title: 'Actions', key: 'actions',
       render: (_, record) => (
         <Button
           type="link"
@@ -357,124 +307,58 @@ const InUse = ({ user }) => {
     setSelectedAsset(record);
     setIsInfoModalVisible(true);
   };
-
-  // Updated handleEdit function with better date handling and debugging
   const handleEdit = (record) => {
-    console.log('Original record warranty info:', record.warrantyInfo);
     setSelectedAsset(record);
-    
-    // Properly convert date strings back to moment objects for the form
-    const formValues = {
+    editForm.setFieldsValue({
       ...record,
       warrantyInfo: record.warrantyInfo ? moment(record.warrantyInfo) : null,
       purchaseDate: record.purchaseDate ? moment(record.purchaseDate) : null,
-    };
-    
-    console.log('Form values being set:', formValues);
-    console.log('Warranty info moment object:', formValues.warrantyInfo);
-    
-    editForm.setFieldsValue(formValues);
+    });
     setIsEditModalVisible(true);
   };
 
-  // Updated handleSaveEditView function with comprehensive debugging and robust date handling
   const handleSaveEditView = async () => {
     try {
       const values = await editForm.validateFields();
-      console.log('Raw form values:', values);
-      console.log('Warranty info from form:', values.warrantyInfo);
-      console.log('Is warranty info a moment object?', moment.isMoment(values.warrantyInfo));
-      
-      // Create payload with proper date formatting
+      const updatedAsset = { ...values };
+      // Only format if Moment object
+      if (updatedAsset.warrantyInfo && moment.isMoment(updatedAsset.warrantyInfo)) {
+        updatedAsset.warrantyInfo = updatedAsset.warrantyInfo.format('YYYY-MM-DD');
+      }
+      if (updatedAsset.purchaseDate && moment.isMoment(updatedAsset.purchaseDate)) {
+        updatedAsset.purchaseDate = updatedAsset.purchaseDate.format('YYYY-MM-DD');
+      }
       const payloadToSend = {
-        category: values.category,
-        model: values.model,
-        serialNumber: values.serialNumber,
-        location: values.location,
-        comment: values.comment || null,
-        assigneeName: values.assigneeName,
-        position: values.position,
-        employeeEmail: values.employeeEmail,
-        phoneNumber: values.phoneNumber,
-        department: values.department,
-        status: values.status,
-        purchasePrice: values.purchasePrice || null,
-        damageDescription: values.status === 'Damaged' ? values.damageDescription : null,
+        category: updatedAsset.category,
+        model: updatedAsset.model,
+        serialNumber: updatedAsset.serialNumber,
+        warrantyInfo: updatedAsset.warrantyInfo,
+        location: updatedAsset.location,
+        comment: updatedAsset.comment,
+        assigneeName: updatedAsset.assigneeName,
+        position: updatedAsset.position,
+        employeeEmail: updatedAsset.employeeEmail,
+        phoneNumber: updatedAsset.phoneNumber,
+        department: updatedAsset.department,
+        damageDescription: updatedAsset.status === 'Damaged' ? updatedAsset.damageDescription : null,
+        purchaseDate: updatedAsset.purchaseDate,
+        status: updatedAsset.status,  // Still included, but see below (disabled in modal)
+        purchasePrice: updatedAsset.purchasePrice,
       };
+      for (const k of ['assigneeName','position','employeeEmail','phoneNumber','department','comment','damageDescription'])
+        if (payloadToSend[k] === "") payloadToSend[k] = null;
 
-      // Handle warranty date - multiple format checks with extensive logging
-      if (values.warrantyInfo) {
-        if (moment.isMoment(values.warrantyInfo)) {
-          payloadToSend.warrantyInfo = values.warrantyInfo.format('YYYY-MM-DD');
-          console.log('Formatted warranty (from moment):', payloadToSend.warrantyInfo);
-        } else if (typeof values.warrantyInfo === 'string') {
-          const momentDate = moment(values.warrantyInfo);
-          if (momentDate.isValid()) {
-            payloadToSend.warrantyInfo = momentDate.format('YYYY-MM-DD');
-            console.log('Formatted warranty (from string):', payloadToSend.warrantyInfo);
-          } else {
-            console.error('Invalid date string:', values.warrantyInfo);
-            payloadToSend.warrantyInfo = null;
-          }
-        } else {
-          // Try to convert whatever it is to moment
-          const momentDate = moment(values.warrantyInfo);
-          if (momentDate.isValid()) {
-            payloadToSend.warrantyInfo = momentDate.format('YYYY-MM-DD');
-            console.log('Formatted warranty (fallback):', payloadToSend.warrantyInfo);
-          } else {
-            console.error('Could not parse warranty date:', values.warrantyInfo);
-            payloadToSend.warrantyInfo = null;
-          }
-        }
-      } else {
-        payloadToSend.warrantyInfo = null;
-      }
-
-      // Handle purchase date
-      if (values.purchaseDate) {
-        if (moment.isMoment(values.purchaseDate)) {
-          payloadToSend.purchaseDate = values.purchaseDate.format('YYYY-MM-DD');
-        } else {
-          const momentDate = moment(values.purchaseDate);
-          if (momentDate.isValid()) {
-            payloadToSend.purchaseDate = momentDate.format('YYYY-MM-DD');
-          } else {
-            payloadToSend.purchaseDate = null;
-          }
-        }
-      } else {
-        payloadToSend.purchaseDate = null;
-      }
-
-      // Clean up empty string values
-      Object.keys(payloadToSend).forEach(key => {
-        if (payloadToSend[key] === "") {
-          payloadToSend[key] = null;
-        }
-      });
-
-      console.log('Final payload being sent:', payloadToSend);
-      console.log('Warranty info in payload:', payloadToSend.warrantyInfo);
-
-      const response = await axios.put(
+      await axios.put(
         `http://localhost:5000/api/equipment/${selectedAsset._id}`,
         payloadToSend,
         { headers: getAuthHeader() }
       );
-      
-      console.log('Server response:', response.data);
-      
       message.success('Asset updated successfully.');
       setIsEditModalVisible(false);
       setSelectedAsset(null);
       editForm.resetFields();
-      
-      // Refresh the data instead of reloading the page
-      await fetchInUseAssets();
+      window.location.reload();
     } catch (error) {
-      console.error('Failed to update asset:', error);
-      console.error('Error response:', error.response?.data);
       message.error('Failed to update asset.');
     }
   };
@@ -484,12 +368,10 @@ const InUse = ({ user }) => {
     setReturningAsset(record);
     setReturnPopupVisible(record._id);
   };
-
   const handleReturnCancel = () => {
     setReturnPopupVisible('');
     setReturningAsset(null);
   };
-
   const handleReturnConfirm = async () => {
     if (returningAsset) {
       await handleMoveStatus(returningAsset, 'In Stock');
@@ -603,7 +485,15 @@ const InUse = ({ user }) => {
             </Row>
             <Row gutter={12}>
               <Col span={12}><Form.Item label="Serial Number" name="serialNumber" rules={[{ required: true }]}><Input /></Form.Item></Col>
-              <Col span={12}><Form.Item label="Status" name="status" rules={[{ required: true }]}><Select>{statusOptions.map(opt => <Option key={opt} value={opt}>{opt}</Option>)}</Select></Form.Item></Col>
+              <Col span={12}>
+                <Form.Item label="Status" name="status"
+                  rules={[{ required: true }]}
+                >
+                  <Select disabled /* Block status changing here! */>
+                    {statusOptions.map(opt => <Option key={opt} value={opt}>{opt}</Option>)}
+                  </Select>
+                </Form.Item>
+              </Col>
             </Row>
             <Row gutter={12}>
               <Col span={12}><Form.Item label="Location" name="location" rules={[{ required: true }]}><Select>{locationOptions.map(opt => <Option key={opt} value={opt}>{opt}</Option>)}</Select></Form.Item></Col>
@@ -617,7 +507,7 @@ const InUse = ({ user }) => {
             <Row gutter={12}>
               <Col span={12}><Form.Item label="Assignee Name" name="assigneeName" rules={[{ required: true }]}><Input /></Form.Item></Col>
               <Col span={12}>
-                <Form.Item label="Employee Email" name="employeeEmail" rules={[{ required: true }, { validator: validateEmail }]}>
+                <Form.Item label="Employee Email" name="employeeEmail" rules={[{ required: true }, { type: 'email', message: 'Enter valid email' }]}>
                   <Input />
                 </Form.Item>
               </Col>
@@ -628,7 +518,7 @@ const InUse = ({ user }) => {
             </Row>
             <Row gutter={12}>
               <Col span={12}>
-                <Form.Item label="Phone" name="phoneNumber" rules={[{ required: true }, { validator: validatePhoneNumber }]}>
+                <Form.Item label="Phone" name="phoneNumber" rules={[{ required: true }]}>
                   <Input />
                 </Form.Item>
               </Col>
@@ -683,6 +573,7 @@ const InUse = ({ user }) => {
           </div>
         )}
       </Modal>
+      {/* ...return modal and other logic as you had */}
     </>
   );
 };

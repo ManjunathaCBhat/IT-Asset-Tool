@@ -4,7 +4,7 @@ import {
   Table, Typography, Modal, Button, Space, Popconfirm, Input, message
 } from 'antd';
 import {
-  SearchOutlined, EyeOutlined, InfoCircleOutlined, RollbackOutlined, DeleteOutlined
+  SearchOutlined, EyeOutlined, InfoCircleOutlined, RollbackOutlined, DeleteOutlined, MinusCircleOutlined
 } from '@ant-design/icons';
 import moment from 'moment';
 import './styles.css'; // <-- Import your common styles
@@ -143,18 +143,33 @@ const DamagedProducts = ({ user }) => {
     setRepairConfirmVisible(false);
   };
 
-  // Delete (to 'Removed')
-  const handleDelete = async (asset) => {
+  // Move to E-Waste
+  const handleMoveToEWaste = async (asset) => {
+    try {
+      await axios.put(
+        `http://localhost:5000/api/equipment/${asset._id}`,
+        { status: 'E-Waste' },
+        { headers: getAuthHeader() }
+      );
+      message.success('Asset moved to E-Waste.');
+      window.location.reload();
+    } catch {
+      message.error('Failed to move to E-Waste.');
+    }
+  };
+
+  // Remove from Damaged (to 'Removed')
+  const handleRemoveFromDamaged = async (asset) => {
     try {
       await axios.put(
         `http://localhost:5000/api/equipment/${asset._id}`,
         { status: 'Removed' },
         { headers: getAuthHeader() }
       );
-      message.success('Asset moved to Removed.');
+      message.success('Asset removed from Damaged.');
       window.location.reload();
     } catch {
-      message.error('Failed to move to Removed.');
+      message.error('Failed to remove from Damaged.');
     }
   };
 
@@ -237,16 +252,30 @@ const DamagedProducts = ({ user }) => {
             Repaired
           </Button>
           <Popconfirm
-            title="Really remove this asset from Damaged?"
-            onConfirm={() => handleDelete(asset)}
-            okText="Delete"
+            title="Remove this asset from Damaged?"
+            description="This will move the asset to the Removed section."
+            onConfirm={() => handleRemoveFromDamaged(asset)}
+            okText="Remove"
             cancelText="Cancel"
             disabled={user?.role === "Viewer"}
           >
             <Button
-              icon={<DeleteOutlined />}
-              danger
+              icon={<MinusCircleOutlined style={{ color: '#555555' }} />}
               title="Remove from Damaged"
+              disabled={user?.role === "Viewer"}
+            />
+          </Popconfirm>
+          <Popconfirm
+            title="Move this asset to E-Waste?"
+            description="This asset will be moved to the E-Waste section."
+            onConfirm={() => handleMoveToEWaste(asset)}
+            okText="Move to E-Waste"
+            cancelText="Cancel"
+            disabled={user?.role === "Viewer"}
+          >
+            <Button
+              icon={<DeleteOutlined style={{ color: '#8B572A' }} />}
+              title="Move to E-Waste"
               disabled={user?.role === "Viewer"}
             />
           </Popconfirm>

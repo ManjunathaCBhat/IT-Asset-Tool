@@ -133,8 +133,8 @@ const AddEquipment = () => {
                         <Col xs={24} lg={12}>
                             <Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>Hardware & Warranty Details</Title>
                             <Row gutter={16}>
-                                <Col span={12}><Form.Item name="model" label="Model / Brand" rules={[{ validator: validateModel }]} style={{ marginBottom: 12 }}><Input placeholder="e.g., Dell Latitude 5420" /></Form.Item></Col>
-                                <Col span={12}><Form.Item name="serialNumber" label="Serial Number" rules={[{ validator: validateSerialNumber }]} style={{ marginBottom: 12 }}><Input placeholder="Enter serial number" /></Form.Item></Col>
+                                <Col span={12}><Form.Item name="model" label="Model / Brand" rules={[{ required: true,validator: validateModel }]} style={{ marginBottom: 12 }}><Input placeholder="e.g., Dell Latitude 5420" /></Form.Item></Col>
+                                <Col span={12}><Form.Item name="serialNumber" label="Serial Number" rules={[{ required: true,validator: validateSerialNumber }]} style={{ marginBottom: 12 }}><Input placeholder="Enter serial number" /></Form.Item></Col>
                                 <Col span={12}>
                                     <Form.Item name="location" label="Location" rules={[{ required: true, message: 'Please select a location!' }]} style={{ marginBottom: 12 }}>
                                         <Select placeholder="Select Location">

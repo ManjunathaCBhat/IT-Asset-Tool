@@ -4,7 +4,8 @@ import {
     DatabaseOutlined, CheckCircleOutlined, ToolOutlined, WarningOutlined, DeleteOutlined,
     LaptopOutlined, DesktopOutlined, AudioOutlined,
     // NEW ICONS FOR KEYBOARD AND MOUSE
-    AimOutlined, BorderlessTableOutlined // Used for Mouse and Keyboard respectively
+    AimOutlined, BorderlessTableOutlined, // Used for Mouse and Keyboard respectively
+    MinusCircleOutlined
 } from '@ant-design/icons'; // Ensure these icons are imported
 import axios from 'axios';
 import moment from 'moment';
@@ -203,7 +204,7 @@ const Dashboard = () => {
                         <Statistic
                             title="Removed"
                             value={summaryData.removed}
-                            prefix={<DeleteOutlined style={{ color: getStatusColor('Removed') }} />}
+                            prefix={<MinusCircleOutlined style={{ color: getStatusColor('Removed') }} />}
                         />
                     </Card>
                 </Col>
