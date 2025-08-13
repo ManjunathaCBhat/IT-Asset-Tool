@@ -18,6 +18,8 @@ const AddEquipment = () => {
     const [form] = Form.useForm();
     const navigate = useNavigate();
     const [category, setCategory] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [errors, setErrors] = useState({});
 
     const generateAssetId = async (cat = '') => {
         const prefix = cat ? cat.substring(0, 3).toUpperCase() : 'OTH';
@@ -35,6 +37,9 @@ const AddEquipment = () => {
     };
 
     const onFinish = async (values) => {
+        setLoading(true);
+        setErrors({}); // Clear previous errors
+
         try {
             const categoryToUse = values.category === 'Other' ? values.customCategory : values.category;
             const assetId = await generateAssetId(categoryToUse);
@@ -61,15 +66,51 @@ const AddEquipment = () => {
             message.success('Equipment added successfully!');
             form.resetFields();
             setCategory('');
-            navigate('/InStockView');
+            navigate('/in-stock'); // Fixed navigation path
         } catch (error) {
-            message.error(error.response?.data?.message || 'Failed to add equipment.');
+            console.error('Error adding equipment:', error);
+            
+            if (error.response?.status === 400) {
+                const errorMessage = error.response.data.message;
+                
+                // Handle specific field errors from backend
+                if (errorMessage.includes('Serial Number already exists')) {
+                    setErrors({ serialNumber: errorMessage });
+                    message.error('Serial number already exists. Please use a unique serial number.');
+                    
+                    // Set form field error
+                    form.setFields([{
+                        name: 'serialNumber',
+                        errors: [errorMessage]
+                    }]);
+                } else if (errorMessage.includes('Asset ID already exists')) {
+                    setErrors({ assetId: errorMessage });
+                    message.error('Asset ID already exists. Please try again.');
+                } else {
+                    message.error(errorMessage);
+                }
+            } else if (error.response?.status === 500) {
+                message.error('Server error. Please try again later.');
+            } else {
+                message.error('Failed to add equipment. Please check your connection and try again.');
+            }
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleValuesChange = (changedValues) => {
         if (changedValues.category) {
             setCategory(changedValues.category);
+        }
+        
+        // Clear errors when user starts typing
+        if (changedValues.serialNumber && errors.serialNumber) {
+            setErrors(prev => ({ ...prev, serialNumber: null }));
+            form.setFields([{
+                name: 'serialNumber',
+                errors: []
+            }]);
         }
     };
 
@@ -133,8 +174,33 @@ const AddEquipment = () => {
                         <Col xs={24} lg={12}>
                             <Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>Hardware & Warranty Details</Title>
                             <Row gutter={16}>
-                                <Col span={12}><Form.Item name="model" label="Model / Brand" rules={[{ required: true,validator: validateModel }]} style={{ marginBottom: 12 }}><Input placeholder="e.g., Dell Latitude 5420" /></Form.Item></Col>
-                                <Col span={12}><Form.Item name="serialNumber" label="Serial Number" rules={[{ required: true,validator: validateSerialNumber }]} style={{ marginBottom: 12 }}><Input placeholder="Enter serial number" /></Form.Item></Col>
+                                <Col span={12}>
+                                    <Form.Item 
+                                        name="model" 
+                                        label="Model / Brand" 
+                                        rules={[{ required: true, validator: validateModel }]} 
+                                        style={{ marginBottom: 12 }}
+                                    >
+                                        <Input placeholder="e.g., Dell Latitude 5420" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item 
+                                        name="serialNumber" 
+                                        label="Serial Number" 
+                                        rules={[{ required: true, validator: validateSerialNumber }]} 
+                                        style={{ marginBottom: 12 }}
+                                        validateStatus={errors.serialNumber ? 'error' : ''}
+                                        help={errors.serialNumber}
+                                    >
+                                        <Input 
+                                            placeholder="Enter serial number"
+                                            style={{
+                                                borderColor: errors.serialNumber ? '#ff4d4f' : undefined
+                                            }}
+                                        />
+                                    </Form.Item>
+                                </Col>
                                 <Col span={12}>
                                     <Form.Item name="location" label="Location" rules={[{ required: true, message: 'Please select a location!' }]} style={{ marginBottom: 12 }}>
                                         <Select placeholder="Select Location">
@@ -146,7 +212,11 @@ const AddEquipment = () => {
                                         </Select>
                                     </Form.Item>
                                 </Col>
-                                <Col span={12}><Form.Item name="warrantyInfo" label="Warranty Expiry Date" style={{ marginBottom: 12 }}><DatePicker style={{ width: '100%' }} /></Form.Item></Col>
+                                <Col span={12}>
+                                    <Form.Item name="warrantyInfo" label="Warranty Expiry Date" style={{ marginBottom: 12 }}>
+                                        <DatePicker style={{ width: '100%' }} />
+                                    </Form.Item>
+                                </Col>
                             </Row>
                         </Col>
                     </Row>
@@ -154,8 +224,15 @@ const AddEquipment = () => {
                         <Input.TextArea rows={3} placeholder="Any other relevant details..." />
                     </Form.Item>
                     <Form.Item style={{ textAlign: 'center', marginTop: 16, marginBottom: 0 }}>
-                        <Button type="primary" htmlType="submit" size="large" style={{ width: '50%' }}>
-                            Add Equipment
+                        <Button 
+                            type="primary" 
+                            htmlType="submit" 
+                            size="large" 
+                            style={{ width: '50%' }}
+                            loading={loading}
+                            disabled={loading}
+                        >
+                            {loading ? 'Adding Equipment...' : 'Add Equipment'}
                         </Button>
                     </Form.Item>
                 </Form>
