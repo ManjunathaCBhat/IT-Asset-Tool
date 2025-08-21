@@ -12,10 +12,12 @@ import {
 } from '@ant-design/icons';
 import moment from 'moment';
 
+
 const { Header, Content } = Layout;
 const { Text } = Typography;
 
-// Helper for status colors (consistent across the app)
+
+// --- Helper for status colors (consistent across the app) ---
 const getStatusColor = (status) => {
     const colors = {
         'Dashboard': '#4A90E2',
@@ -29,7 +31,8 @@ const getStatusColor = (status) => {
     return colors[status] || 'default';
 };
 
-// Helper function to get status tag color
+
+// --- Helper function to get status tag color ---
 const getStatusTagColor = (status) => {
     const statusLower = status?.toLowerCase();
     switch (statusLower) {
@@ -48,7 +51,8 @@ const getStatusTagColor = (status) => {
     }
 };
 
-// Helper function to determine the correct route based on asset status
+
+// --- Helper function to determine the correct route based on asset status ---
 const getAssetRoute = (item) => {
     const status = item.status?.toLowerCase();
     const searchParams = `search=${encodeURIComponent(item.serialNumber)}&highlight=true`;
@@ -69,7 +73,8 @@ const getAssetRoute = (item) => {
     }
 };
 
-// Logo Component
+
+// --- Logo Component ---
 const Logo = () => {
     const logoStyle = {
         height: '32px',
@@ -91,18 +96,19 @@ const Logo = () => {
     );
 };
 
+
 const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, lastUpdated, clearAllNotifications }) => {
     const location = useLocation();
     const [refreshing, setRefreshing] = useState(false);
     const [popoverVisible, setPopoverVisible] = useState(false);
     const [clearing, setClearing] = useState(false);
 
-    // User-specific cleared notifications state
+    // Add persistent cleared notifications state
     const [clearedNotifications, setClearedNotifications] = useState(() => {
-        const userKey = `clearedNotifications_${user?.id || user?.email || 'default'}`;
-        const saved = localStorage.getItem(userKey);
+        const saved = localStorage.getItem('clearedNotifications');
         return saved ? JSON.parse(saved) : [];
     });
+
 
     // Manual refresh function
     const handleRefreshNotifications = async (e) => {
@@ -118,10 +124,11 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
         }
     };
 
-    // User-specific clear all notifications function
+
+    // Updated clear all notifications function with persistence
     const handleClearAllNotifications = async (e) => {
         e.stopPropagation();
-        console.log('Clear All clicked - Current user notifications:', filteredExpiringItems.length);
+        console.log('Clear All clicked - Current notifications:', expiringItems.length);
         
         setClearing(true);
         try {
@@ -129,16 +136,13 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                 await clearAllNotifications();
             }
             
-            // Save the cleared notification IDs to localStorage with user-specific key
-            const notificationIds = filteredExpiringItems.map(item => item.serialNumber || item.id);
+            // Save the cleared notification IDs to localStorage
+            const notificationIds = expiringItems.map(item => item.serialNumber || item.id);
             const updatedCleared = [...clearedNotifications, ...notificationIds];
             setClearedNotifications(updatedCleared);
+            localStorage.setItem('clearedNotifications', JSON.stringify(updatedCleared));
             
-            // Use user-specific key for localStorage
-            const userKey = `clearedNotifications_${user?.id || user?.email || 'default'}`;
-            localStorage.setItem(userKey, JSON.stringify(updatedCleared));
-            
-            message.success('All notifications cleared for current user');
+            message.success('All notifications cleared');
         } catch (error) {
             console.error('Failed to clear notifications:', error);
             message.error('Failed to clear notifications');
@@ -146,6 +150,7 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
             setClearing(false);
         }
     };
+
 
     // Define main navigation items for the top bar
     const mainNavItems = [
@@ -157,12 +162,13 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
         { key: '/removed', icon: <MinusCircleOutlined />, label: 'Removed', statusKey: 'Removed' },
     ];
 
-    // Filter out cleared notifications for current user only
+    // Filter out cleared notifications
     const filteredExpiringItems = expiringItems.filter(item => 
         !clearedNotifications.includes(item.serialNumber || item.id)
     );
 
-    // Enhanced notification content with user-specific clearing
+
+    // Enhanced notification content with status display and improved navigation
     const notificationContent = (
         <div style={{ width: 450 }}>
             {/* Header with refresh button */}
@@ -202,6 +208,7 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                     />
                 </Tooltip>
             </div>
+
 
             {/* Scrollable Notifications List */}
             <div style={{ 
@@ -382,7 +389,8 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                 </div>
             </div>
 
-            {/* Clear All Button Section - Only show if user has notifications */}
+
+            {/* Clear All Button Section */}
             {filteredExpiringItems.length > 0 && (
                 <div style={{ 
                     padding: '8px 0',
@@ -407,9 +415,25 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                     </Button>
                 </div>
             )}
-          
+
+
+            {/* Footer with last updated time */}
+            <div style={{ 
+                textAlign: 'center', 
+                padding: '10px 0 8px 0',
+                backgroundColor: '#fafafa',
+                position: 'sticky',
+                bottom: 0,
+                zIndex: 1
+            }}>
+                <Text style={{ fontSize: '10px', color: '#999' }}>
+                    <ClockCircleOutlined style={{ marginRight: '4px' }} />
+                    Last updated: {lastUpdated ? moment(lastUpdated).format('HH:mm:ss') : 'Never'}
+                </Text>
+            </div>
         </div>
     );
+
 
     // Dynamic User Menu Items
     const getUserMenuItems = () => {
@@ -427,6 +451,7 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
             { key: 'divider-1', type: 'divider' },
         ];
 
+
         if (user?.role === 'Admin') {
             items.push({
                 key: 'user-management',
@@ -434,6 +459,7 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                 icon: <TeamOutlined />
             });
         }
+
 
         items.push(
             { key: 'divider-2', type: 'divider' },
@@ -446,6 +472,7 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
         );
         return items;
     };
+
 
     return (
         <Layout style={{ minHeight: '100vh' }}>
@@ -468,12 +495,14 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                     <Logo />
                 </div>
 
+
                 {/* Middle Section: Main Navigation Buttons & Add Equipment */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1 }}>
                     <Space size="middle">
                         {mainNavItems.map(item => {
                             const isActive = location.pathname === item.key;
                             const buttonColor = getStatusColor(item.statusKey);
+
 
                             return (
                                 <Link to={item.key} key={item.key}>
@@ -517,6 +546,7 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                         )}
                     </Space>
                 </div>
+
 
                 {/* Right Section: Notifications and User Profile with Role */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
@@ -564,6 +594,7 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                         </Tooltip>
                     </Popover>
 
+
                     {/* Avatar with Role Below */}
                     <Dropdown menu={{ items: getUserMenuItems() }} placement="bottomRight">
                         <div style={{
@@ -598,5 +629,6 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
         </Layout>
     );
 };
+
 
 export default AppLayout;

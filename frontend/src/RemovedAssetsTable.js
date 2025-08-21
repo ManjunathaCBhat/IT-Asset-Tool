@@ -4,7 +4,7 @@ import axios from 'axios';
 import moment from 'moment';
 import './styles.css'; // Import your unified/app-wide styles
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 const { Search } = Input;
 
 const renderWarrantyTag = (date) => {
@@ -47,7 +47,13 @@ const RemovedAssetsTable = () => {
             const response = await axios.get('http://localhost:5000/api/equipment/removed', {
                 headers: getAuthHeader(),
             });
-            const receivedData = response.data;
+            // Debug: See data format
+            console.log("API DATA:", response.data);
+
+            // Change this to originalStatus if that's what your data uses
+            const receivedData = response.data.filter(
+                item => (item.status && item.status.toLowerCase() === 'removed')
+            );
             setAllRemovedAssets(receivedData);
             setFilteredRemovedAssets(receivedData);
         } catch (err) {

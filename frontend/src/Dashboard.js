@@ -126,13 +126,13 @@ const Dashboard = () => {
         setLoading(true);
         setError(null);
         try {
-            const allAssetsRes = await axios.get('http://localhost:5000/api/equipment', { 
+            const allAssetsRes = await axios.get('http://localhost:5000/api/equipment', {
                 headers: getAuthHeader(),
                 params: { _t: Date.now() }
             });
-            
+
             const allAssets = allAssetsRes.data;
-            
+
             // Calculate summary data from actual assets
             const calculatedSummary = {
                 totalAssets: allAssets.length,
@@ -142,12 +142,12 @@ const Dashboard = () => {
                 eWaste: allAssets.filter(asset => asset.status === 'E-Waste').length,
                 removed: allAssets.filter(asset => asset.status === 'Removed').length,
             };
-            
+
             setSummaryData(calculatedSummary);
 
             const groupedSummary = summarizeByCategory(allAssets);
             setCategoryAssetSummaries(groupedSummary);
-            
+
             setLastUpdated(new Date());
 
         } catch (err) {

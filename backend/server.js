@@ -124,7 +124,7 @@ const Equipment = mongoose.model('Equipment', EquipmentSchema);
 const cleanupDuplicateSerialNumbers = async () => {
     try {
         console.log('Checking for duplicate serial numbers...');
-        
+
         const pipeline = [
             {
                 $match: {
@@ -144,18 +144,18 @@ const cleanupDuplicateSerialNumbers = async () => {
                 }
             }
         ];
-        
+
         const duplicates = await Equipment.aggregate(pipeline);
-        
+
         if (duplicates.length === 0) {
             console.log('No duplicate serial numbers found.');
             return;
         }
-        
+
         for (const duplicate of duplicates) {
             // Keep the first document, update others with unique serial numbers
             const idsToUpdate = duplicate.ids.slice(1);
-            
+
             for (let i = 0; i < idsToUpdate.length; i++) {
                 const newSerialNumber = `${duplicate._id}_DUPLICATE_${i + 1}`;
                 await Equipment.findByIdAndUpdate(idsToUpdate[i], {
@@ -164,7 +164,7 @@ const cleanupDuplicateSerialNumbers = async () => {
                 console.log(`Updated duplicate serial number for ID ${idsToUpdate[i]} to: ${newSerialNumber}`);
             }
         }
-        
+
         console.log(`Fixed ${duplicates.length} duplicate serial number groups`);
     } catch (error) {
         console.error('Error cleaning up duplicates:', error);
@@ -178,12 +178,12 @@ const ensureIndexes = async () => {
         console.log('Equipment indexes synchronized successfully');
     } catch (error) {
         console.error('Error synchronizing indexes:', error);
-        
+
         // If index creation fails due to duplicates, try to fix them
         if (error.code === 11000) {
             console.log('Duplicate key error detected. Attempting to clean up duplicates...');
             await cleanupDuplicateSerialNumbers();
-            
+
             // Try to sync indexes again after cleanup
             try {
                 await Equipment.syncIndexes();
@@ -464,8 +464,6 @@ app.get('/api/equipment/summary', auth, async (req, res) => {
         const removed = await Equipment.countDocuments({
             $or: [
                 { status: 'E-Waste' },
-                { status: 'Damaged' },
-                { status: 'Removed' },
                 { isDeleted: true }
             ]
         });
@@ -561,30 +559,6 @@ app.get('/api/equipment/expiring-warranty/debug', auth, async (req, res) => {
     }
 });
 
-// In your backend API
-app.get('/api/equipment/debug-counts', async (req, res) => {
-    try {
-        const allEquipment = await Equipment.find({});
-        const counts = {
-            total: allEquipment.length,
-            inUse: allEquipment.filter(item => item.status === 'In Use').length,
-            inStock: allEquipment.filter(item => item.status === 'In Stock').length,
-            damaged: allEquipment.filter(item => item.status === 'Damaged').length,
-            eWaste: allEquipment.filter(item => item.status === 'E-Waste').length,
-            removed: allEquipment.filter(item => item.status === 'Removed').length,
-        };
-        
-        res.json({
-            counts,
-            removedItems: allEquipment
-                .filter(item => item.status === 'Removed')
-                .map(item => ({ id: item._id, model: item.model, serialNumber: item.serialNumber }))
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
 app.get('/api/equipment/grouped-by-email', auth, async (req, res) => {
     try {
         const groupedData = await Equipment.aggregate([
@@ -643,8 +617,6 @@ app.get('/api/equipment/removed', auth, async (req, res) => {
     try {
         const removedAssets = await Equipment.find({
             $or: [
-                { status: 'E-Waste' },
-                { status: 'Damaged' },
                 { status: 'Removed' },
                 { isDeleted: true }
             ]
