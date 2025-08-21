@@ -70,6 +70,7 @@ const App = () => {
             const response = await axios.get('http://localhost:5000/api/equipment/expiring-warranty', {
                 headers: { 'x-auth-token': token }
             });
+            console.log('Fetched expiring items:', response.data.length);
             setExpiringItems(response.data);
             setLastUpdated(new Date());
         } catch (error) {
@@ -85,6 +86,23 @@ const App = () => {
     const refreshExpiringItems = async () => {
         const token = localStorage.getItem('token');
         await fetchExpiringItems(token);
+    };
+
+    // Clear all notifications function - FIXED
+    const clearAllNotifications = async () => {
+        try {
+            console.log('Clearing notifications - Before:', expiringItems.length);
+            
+            // Clear the notifications by creating a new empty array (immutable update)
+            setExpiringItems([]); // This should trigger re-render
+            setLastUpdated(new Date()); // Update last updated time
+            
+            console.log('Clearing notifications - After: 0');
+            return Promise.resolve();
+        } catch (error) {
+            console.error('Error clearing notifications:', error);
+            return Promise.reject(error);
+        }
     };
 
     // Initial load effect
@@ -149,8 +167,8 @@ const App = () => {
                     <>
                         <Route path="/" element={<WelcomePage />} />
                         <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
-                        <Route path="*" element={<Navigate to="/" replace />} />
                         <Route path="/reset-password" element={<ResetPasswordPage />} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
                     </>
                 ) : (
                     // --- Routes for AUTHENTICATED users ---
@@ -165,11 +183,12 @@ const App = () => {
                                     expiringItems={expiringItems}
                                     refreshExpiringItems={refreshExpiringItems}
                                     lastUpdated={lastUpdated}
+                                    clearAllNotifications={clearAllNotifications}
                                 />
                             </div>
                         }
                     >
-                        {/* Dashboard is now the default child route for authenticated users */}
+                        {/* Dashboard is the default child route for authenticated users */}
                         <Route index element={<Dashboard />} />
                         <Route path="in-stock" element={<InStockView user={user} />} />
                         <Route path="in-use" element={<InUse user={user} />} />

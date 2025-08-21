@@ -38,7 +38,12 @@ const AddEquipment = () => {
 
     const onFinish = async (values) => {
         setLoading(true);
+<<<<<<< HEAD
         setErrors({});
+=======
+        setErrors({}); // Clear previous errors
+
+>>>>>>> 87881651f5a14c037c67164ffebb5af4de3317ea
         try {
             const categoryToUse = values.category === 'Other' ? values.customCategory : values.category;
             const assetId = await generateAssetId(categoryToUse);
@@ -65,6 +70,7 @@ const AddEquipment = () => {
             message.success('Equipment added successfully!');
             form.resetFields();
             setCategory('');
+<<<<<<< HEAD
             navigate('/in-stock');
         } catch (error) {
             console.error('Error adding equipment:', error);
@@ -73,6 +79,21 @@ const AddEquipment = () => {
                 if (errorMessage.includes('Serial Number already exists')) {
                     setErrors({ serialNumber: errorMessage });
                     message.error('Serial number already exists. Please use a unique serial number.');
+=======
+            navigate('/in-stock'); // Fixed navigation path
+        } catch (error) {
+            console.error('Error adding equipment:', error);
+            
+            if (error.response?.status === 400) {
+                const errorMessage = error.response.data.message;
+                
+                // Handle specific field errors from backend
+                if (errorMessage.includes('Serial Number already exists')) {
+                    setErrors({ serialNumber: errorMessage });
+                    message.error('Serial number already exists. Please use a unique serial number.');
+                    
+                    // Set form field error
+>>>>>>> 87881651f5a14c037c67164ffebb5af4de3317ea
                     form.setFields([{
                         name: 'serialNumber',
                         errors: [errorMessage]
@@ -97,6 +118,10 @@ const AddEquipment = () => {
         if (changedValues.category) {
             setCategory(changedValues.category);
         }
+<<<<<<< HEAD
+=======
+        
+>>>>>>> 87881651f5a14c037c67164ffebb5af4de3317ea
         // Clear errors when user starts typing
         if (changedValues.serialNumber && errors.serialNumber) {
             setErrors(prev => ({ ...prev, serialNumber: null }));
@@ -195,6 +220,36 @@ const AddEquipment = () => {
                         <Col xs={24} lg={12}>
                             <Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>Hardware & Warranty Details</Title>
                             <Row gutter={16}>
+<<<<<<< HEAD
+=======
+                                <Col span={12}>
+                                    <Form.Item 
+                                        name="model" 
+                                        label="Model / Brand" 
+                                        rules={[{ required: true, validator: validateModel }]} 
+                                        style={{ marginBottom: 12 }}
+                                    >
+                                        <Input placeholder="e.g., Dell Latitude 5420" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item 
+                                        name="serialNumber" 
+                                        label="Serial Number" 
+                                        rules={[{ required: true, validator: validateSerialNumber }]} 
+                                        style={{ marginBottom: 12 }}
+                                        validateStatus={errors.serialNumber ? 'error' : ''}
+                                        help={errors.serialNumber}
+                                    >
+                                        <Input 
+                                            placeholder="Enter serial number"
+                                            style={{
+                                                borderColor: errors.serialNumber ? '#ff4d4f' : undefined
+                                            }}
+                                        />
+                                    </Form.Item>
+                                </Col>
+>>>>>>> 87881651f5a14c037c67164ffebb5af4de3317ea
                                 <Col span={12}>
                                     <Form.Item
                                         name="model"
@@ -245,11 +300,15 @@ const AddEquipment = () => {
                                     </Form.Item>
                                 </Col>
                                 <Col span={12}>
+<<<<<<< HEAD
                                     <Form.Item
                                         name="warrantyInfo"
                                         label="Warranty Expiry Date"
                                         style={{ marginBottom: 12 }}
                                     >
+=======
+                                    <Form.Item name="warrantyInfo" label="Warranty Expiry Date" style={{ marginBottom: 12 }}>
+>>>>>>> 87881651f5a14c037c67164ffebb5af4de3317ea
                                         <DatePicker style={{ width: '100%' }} />
                                     </Form.Item>
                                 </Col>
@@ -260,10 +319,17 @@ const AddEquipment = () => {
                         <Input.TextArea rows={3} placeholder="Any other relevant details..." />
                     </Form.Item>
                     <Form.Item style={{ textAlign: 'center', marginTop: 16, marginBottom: 0 }}>
+<<<<<<< HEAD
                         <Button
                             type="primary"
                             htmlType="submit"
                             size="large"
+=======
+                        <Button 
+                            type="primary" 
+                            htmlType="submit" 
+                            size="large" 
+>>>>>>> 87881651f5a14c037c67164ffebb5af4de3317ea
                             style={{ width: '50%' }}
                             loading={loading}
                             disabled={loading}

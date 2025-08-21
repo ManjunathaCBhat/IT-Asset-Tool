@@ -604,6 +604,11 @@ const LoginPage = ({ onLogin }) => {
             width: '100%',
             paddingTop: '40px',
             boxSizing: 'border-box'
+        },
+
+        required: {
+        color: '#ff4d4f',
+        marginLeft: '2px'
         }
     };
 
@@ -630,35 +635,42 @@ const LoginPage = ({ onLogin }) => {
                     <h2 style={styles.heading}>IT Department Login</h2>
                     
                     <form onSubmit={handleLogin}>
-                        <div style={styles.inputContainer}>
-                            <label style={styles.label}>Email Address</label>
-                            <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="Enter your email"
-                                required
-                                style={styles.input}
-                            />
-                        </div>
-                        
-                        <div style={styles.inputContainer}>
-                            <label style={styles.label}>Password</label>
-                            <input
-                                type={showPassword ? 'text' : 'password'}
-                                style={styles.passwordInput}
-                                value={password}
-                                onChange={e => setPassword(e.target.value)}
-                                placeholder="Enter your password"
-                                required
-                            />
-                            <span
-                                onClick={() => setShowPassword(!showPassword)}
-                                style={styles.eyeIcon}
-                            >
-                                {showPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-                            </span>
-                        </div>
+             {/* Email Field */}
+<div style={styles.inputContainer}>
+    <label style={styles.label}>
+        Email Address<span style={styles.required}>*</span>
+    </label>
+    <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Enter your email"
+        required={true}
+        style={styles.input}
+    />
+</div>
+
+{/* Password Field */}
+<div style={styles.inputContainer}>
+    <label style={styles.label}>
+        Password<span style={styles.required}>*</span>
+    </label>
+    <input
+        type={showPassword ? 'text' : 'password'}
+        style={styles.passwordInput}
+        value={password}
+        onChange={e => setPassword(e.target.value)}
+        placeholder="Enter your password"
+        required={true}
+    />
+    <span
+        onClick={() => setShowPassword(!showPassword)}
+        style={styles.eyeIcon}
+    >
+        {showPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+    </span>
+</div>
+
                         
                         <div style={styles.error}>{error}</div>
                         
@@ -715,16 +727,16 @@ const LoginPage = ({ onLogin }) => {
                         <div style={styles.modalContentWrapper}>
                             {forgotStep === 1 ? (
                                 <>
-                                    <h3 style={{...styles.heading, marginBottom: '1.5rem'}}>Reset Password</h3>
+                                    <h3 style={{...styles.heading, marginBottom: '1.5rem'}}>Reset Password </h3>
                                     <form onSubmit={handleRequestReset}>
                                         <div style={styles.inputContainer}>
-                                            <label style={styles.label}>Email Address</label>
+                                            <label style={styles.label}>Email Address<span style={styles.required}>*</span></label>
                                             <input
                                                 type="email"
                                                 value={forgotEmail}
                                                 onChange={(e) => setForgotEmail(e.target.value)}
                                                 placeholder="Enter your email"
-                                                required
+                                                required = {true}
                                                 style={styles.input}
                                             />
                                         </div>
@@ -743,18 +755,22 @@ const LoginPage = ({ onLogin }) => {
                                     <h3 style={{...styles.heading, marginBottom: '1.5rem'}}>Enter New Password</h3>
                                     <form onSubmit={handleResetPassword}>
                                         <div style={styles.inputContainer}>
-                                            <label style={styles.label}>Reset Token</label>
-                                            <input
-                                                type="text"
-                                                value={resetToken}
-                                                onChange={(e) => setResetToken(e.target.value)}
-                                                placeholder="Enter the token from your email"
-                                                required
-                                                style={styles.input}
-                                            />
-                                        </div>
+                                     <label style={styles.label}>
+                                       Reset Token<span style={styles.required}>*</span>
+                                    </label>
+                                <input
+                                    type="text"
+                                    value={resetToken}  // Make sure this is resetToken, not forgotEmail
+                                    onChange={(e) => setResetToken(e.target.value)}
+                                    placeholder="Enter the token from your email"
+                                    required
+                                    style={styles.input}  // Use regular input style, not passwordInput
+                                    autoComplete="off"
+                                 />
+                                </div>
+
                                         <div style={styles.inputContainer}>
-                                            <label style={styles.label}>New Password</label>
+                                            <label style={styles.label}>New Password<span style={styles.required}>*</span></label>
                                             <input
                                                 type={showNewPassword ? 'text' : 'password'}
                                                 value={newPassword}
@@ -762,6 +778,7 @@ const LoginPage = ({ onLogin }) => {
                                                 placeholder="Enter new password"
                                                 required
                                                 style={styles.passwordInput}
+                                                autoComplete="new-password"
                                             />
                                             <span
                                                 onClick={() => setShowNewPassword(!showNewPassword)}
@@ -771,13 +788,13 @@ const LoginPage = ({ onLogin }) => {
                                             </span>
                                         </div>
                                         <div style={styles.inputContainer}>
-                                            <label style={styles.label}>Confirm New Password</label>
+                                            <label style={styles.label}>Confirm New Password<span style={styles.required}>*</span></label>
                                             <input
                                                 type={showConfirmPassword ? 'text' : 'password'}
                                                 value={confirmPassword}
                                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                                 placeholder="Confirm new password"
-                                                required
+                                                required = {true}
                                                 style={styles.passwordInput}
                                             />
                                             <span
