@@ -79,9 +79,9 @@ const sendResetEmail = async (email, resetToken) => {
 const UserSchema = new mongoose.Schema({
     name: {
         type: String,
-        required: true,        // Make it mandatory for new user documents
-        minlength: 2,          // Optional: minimum length
-        maxlength: 100         // Optional: maximum length
+        required: true,
+        minlength: 2,
+        maxlength: 100
     },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -91,7 +91,7 @@ const UserSchema = new mongoose.Schema({
 });
 
 app.use((err, req, res, next) => {
-  console.error(err.stack); // log full error to console for debugging
+  console.error(err.stack);
   res.status(500).json({ message: "Internal Server Error", error: err.message });
 });
 
@@ -100,10 +100,8 @@ const EquipmentSchema = new mongoose.Schema({
     category: { type: String, required: true },
     status: { type: String, required: true, enum: ['In Use', 'In Stock', 'Damaged', 'E-Waste', 'Removed'] },
     model: { type: String },
-    serialNumber: { type: String },
-    // IMPORTANT: To make date comparisons work reliably, this should be a Date type
-    // If you store 'Invalid date' string, MongoDB cannot query it as a date.
-    warrantyInfo: { type: Date }, // Changed to Date type for proper date comparisons
+    serialNumber: { type: String, unique: true }, // Made unique
+    warrantyInfo: { type: Date },
     location: { type: String },
     comment: { type: String },
     assigneeName: { type: String },
@@ -117,10 +115,85 @@ const EquipmentSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     }
-}, { timestamps: true }); // timestamps adds createdAt and updatedAt
+}, { timestamps: true });
 
 const User = mongoose.model('User', UserSchema);
 const Equipment = mongoose.model('Equipment', EquipmentSchema);
+
+// --- Function to Clean Up Duplicate Serial Numbers ---
+const cleanupDuplicateSerialNumbers = async () => {
+    try {
+        console.log('Checking for duplicate serial numbers...');
+        
+        const pipeline = [
+            {
+                $match: {
+                    serialNumber: { $ne: null, $ne: "" }
+                }
+            },
+            {
+                $group: {
+                    _id: "$serialNumber",
+                    ids: { $push: "$_id" },
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $match: {
+                    count: { $gt: 1 }
+                }
+            }
+        ];
+        
+        const duplicates = await Equipment.aggregate(pipeline);
+        
+        if (duplicates.length === 0) {
+            console.log('No duplicate serial numbers found.');
+            return;
+        }
+        
+        for (const duplicate of duplicates) {
+            // Keep the first document, update others with unique serial numbers
+            const idsToUpdate = duplicate.ids.slice(1);
+            
+            for (let i = 0; i < idsToUpdate.length; i++) {
+                const newSerialNumber = `${duplicate._id}_DUPLICATE_${i + 1}`;
+                await Equipment.findByIdAndUpdate(idsToUpdate[i], {
+                    serialNumber: newSerialNumber
+                });
+                console.log(`Updated duplicate serial number for ID ${idsToUpdate[i]} to: ${newSerialNumber}`);
+            }
+        }
+        
+        console.log(`Fixed ${duplicates.length} duplicate serial number groups`);
+    } catch (error) {
+        console.error('Error cleaning up duplicates:', error);
+    }
+};
+
+// --- Function to Ensure Indexes ---
+const ensureIndexes = async () => {
+    try {
+        await Equipment.syncIndexes();
+        console.log('Equipment indexes synchronized successfully');
+    } catch (error) {
+        console.error('Error synchronizing indexes:', error);
+        
+        // If index creation fails due to duplicates, try to fix them
+        if (error.code === 11000) {
+            console.log('Duplicate key error detected. Attempting to clean up duplicates...');
+            await cleanupDuplicateSerialNumbers();
+            
+            // Try to sync indexes again after cleanup
+            try {
+                await Equipment.syncIndexes();
+                console.log('Equipment indexes synchronized successfully after cleanup');
+            } catch (retryError) {
+                console.error('Failed to sync indexes even after cleanup:', retryError);
+            }
+        }
+    }
+};
 
 // --- Function to Seed First Admin User ---
 const seedAdminUser = async () => {
@@ -149,9 +222,10 @@ const seedAdminUser = async () => {
 
 // --- Connect to DB and Seed Admin ---
 mongoose.connect(MONGO_URI)
-    .then(() => {
+    .then(async () => {
         console.log('MongoDB connected successfully.');
-        seedAdminUser();
+        await seedAdminUser();
+        await ensureIndexes();
     })
     .catch(err => console.error('MongoDB connection error:', err));
 
@@ -164,7 +238,7 @@ const auth = (req, res, next) => {
     }
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        req.user = decoded.user; // Attach user info to request
+        req.user = decoded.user;
         next();
     } catch (e) {
         console.log('Auth middleware: Invalid token', e.message);
@@ -186,7 +260,7 @@ const requireRole = (roles) => (req, res, next) => {
 app.get('/test-sendgrid', async (req, res) => {
     try {
         const msg = {
-            to: 'your-test-email@domain.com', // Replace with your actual email
+            to: 'your-test-email@domain.com',
             from: process.env.SENDGRID_FROM_EMAIL,
             subject: 'SendGrid Test',
             text: 'Testing SendGrid connection from server'
@@ -223,7 +297,7 @@ app.post('/api/users/login', async (req, res) => {
     }
 });
 
-// --- FORGOT PASSWORD ENDPOINT (NEW) ---
+// --- FORGOT PASSWORD ENDPOINT ---
 app.post('/api/forgot-password', async (req, res) => {
     const { email } = req.body;
     console.log('Password reset requested for:', email);
@@ -237,15 +311,11 @@ app.post('/api/forgot-password', async (req, res) => {
             });
         }
 
-        // Generate reset token
         const resetToken = crypto.randomBytes(20).toString('hex');
-
-        // Save token to database
         user.resetPasswordToken = resetToken;
         user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
         await user.save();
 
-        // Send email
         const emailResult = await sendResetEmail(email, resetToken);
 
         if (emailResult.success) {
@@ -269,7 +339,7 @@ app.post('/api/forgot-password', async (req, res) => {
     }
 });
 
-// --- RESET PASSWORD ENDPOINT (UPDATED) ---
+// --- RESET PASSWORD ENDPOINT ---
 app.post('/api/reset-password', async (req, res) => {
     console.log('Reset password request body:', req.body);
     const { email, token, newPassword } = req.body;
@@ -277,7 +347,7 @@ app.post('/api/reset-password', async (req, res) => {
         const user = await User.findOne({
             email,
             resetPasswordToken: token,
-            resetPasswordExpires: { $gt: Date.now() } // Token not expired
+            resetPasswordExpires: { $gt: Date.now() }
         });
 
         if (!user) {
@@ -289,8 +359,6 @@ app.post('/api/reset-password', async (req, res) => {
 
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(newPassword, salt);
-
-        // Clear reset token fields
         user.resetPasswordToken = undefined;
         user.resetPasswordExpires = undefined;
 
@@ -320,11 +388,11 @@ app.get('/api/users', [auth, requireRole(['Admin'])], async (req, res) => {
 });
 
 app.post('/api/users/create', [auth, requireRole(['Admin'])], async (req, res) => {
-    const { name, email, password, role } = req.body;  // <-- add name here
+    const { name, email, password, role } = req.body;
     try {
         let user = await User.findOne({ email });
         if (user) return res.status(400).json({ msg: 'User already exists' });
-        user = new User({ name, email, password, role });  // <-- add name here
+        user = new User({ name, email, password, role });
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(password, salt);
         await user.save();
@@ -335,8 +403,6 @@ app.post('/api/users/create', [auth, requireRole(['Admin'])], async (req, res) =
     }
 });
 
-// --- UPDATE USER ROLE ENDPOINT (ADDED) ---
-// --- UPDATE USER ENDPOINT (ALL FIELDS, PASSWORD OPTIONAL, HASHED) ---
 app.put('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) => {
     try {
         const { name, email, role, password } = req.body;
@@ -363,7 +429,6 @@ app.put('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) => {
         res.json({ msg: 'User updated successfully', user: updatedUser });
     } catch (err) {
         if (err.code === 11000) {
-            // Duplicate email, unique key constraint
             return res.status(400).json({ msg: 'Email already in use' });
         }
         res.status(500).json({ msg: 'Server Error', error: err.message });
@@ -375,7 +440,6 @@ app.delete('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) =>
         if (req.params.id === req.user.id) {
             return res.status(400).json({ msg: 'Cannot delete your own account' });
         }
-        // Use the correct Mongoose delete method
         const deletedUser = await User.findByIdAndDelete(req.params.id)
         if (!deletedUser) {
             return res.status(404).json({ msg: 'User not found' });
@@ -387,12 +451,8 @@ app.delete('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) =>
     }
 });
 
-// --- Equipment Endpoints (REORDERED FOR SPECIFICITY) ---
+// --- Equipment Endpoints ---
 
-// 1. Dashboard Specific Summary Endpoints
-// @route   GET /api/equipment/summary
-// @desc    Get summary counts for dashboard
-// @access  Private
 app.get('/api/equipment/summary', auth, async (req, res) => {
     try {
         const totalAssets = await Equipment.countDocuments({ isDeleted: { $ne: true } });
@@ -424,9 +484,6 @@ app.get('/api/equipment/summary', auth, async (req, res) => {
     }
 });
 
-// @route   GET /api/equipment/total-value
-// @desc    Calculate total value of assets (excluding soft-deleted)
-// @access  Private
 app.get('/api/equipment/total-value', auth, async (req, res) => {
     try {
         const result = await Equipment.aggregate([
@@ -447,9 +504,6 @@ app.get('/api/equipment/total-value', auth, async (req, res) => {
     }
 });
 
-// @route   GET /api/equipment/expiring-warranty
-// @desc    Get assets with warranty expiring in 30 days (excluding E-Waste and Damaged) - UPDATED TO INCLUDE STATUS
-// @access  Private
 app.get('/api/equipment/expiring-warranty', auth, async (req, res) => {
     try {
         const thirtyDaysFromNow = moment().add(30, 'days').toDate();
@@ -459,7 +513,7 @@ app.get('/api/equipment/expiring-warranty', auth, async (req, res) => {
             warrantyInfo: { $exists: true, $ne: null, $type: 9, $gte: now, $lte: thirtyDaysFromNow },
             status: { $nin: ['E-Waste', 'Damaged', 'Removed'] },
             isDeleted: { $ne: true }
-        }).select('model serialNumber warrantyInfo status category assetId'); // Added 'status' field here
+        }).select('model serialNumber warrantyInfo status category assetId');
 
         console.log(`Found ${expiringItems.length} expiring items with status field`);
         if (expiringItems.length > 0) {
@@ -473,9 +527,6 @@ app.get('/api/equipment/expiring-warranty', auth, async (req, res) => {
     }
 });
 
-// @route   GET /api/equipment/expiring-warranty/debug
-// @desc    Debug endpoint to check expiring warranty data structure
-// @access  Private
 app.get('/api/equipment/expiring-warranty/debug', auth, async (req, res) => {
     try {
         const thirtyDaysFromNow = moment().add(30, 'days').toDate();
@@ -510,9 +561,30 @@ app.get('/api/equipment/expiring-warranty/debug', auth, async (req, res) => {
     }
 });
 
-// @route   GET /api/equipment/grouped-by-email
-// @desc    Get assets grouped by employee email
-// @access  Private
+// In your backend API
+app.get('/api/equipment/debug-counts', async (req, res) => {
+    try {
+        const allEquipment = await Equipment.find({});
+        const counts = {
+            total: allEquipment.length,
+            inUse: allEquipment.filter(item => item.status === 'In Use').length,
+            inStock: allEquipment.filter(item => item.status === 'In Stock').length,
+            damaged: allEquipment.filter(item => item.status === 'Damaged').length,
+            eWaste: allEquipment.filter(item => item.status === 'E-Waste').length,
+            removed: allEquipment.filter(item => item.status === 'Removed').length,
+        };
+        
+        res.json({
+            counts,
+            removedItems: allEquipment
+                .filter(item => item.status === 'Removed')
+                .map(item => ({ id: item._id, model: item.model, serialNumber: item.serialNumber }))
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/api/equipment/grouped-by-email', auth, async (req, res) => {
     try {
         const groupedData = await Equipment.aggregate([
@@ -567,9 +639,6 @@ app.get('/api/equipment/grouped-by-email', auth, async (req, res) => {
     }
 });
 
-// @route   GET /api/equipment/removed
-// @desc    Get all assets that have been marked as removed/e-waste/damaged
-// @access  Private
 app.get('/api/equipment/removed', auth, async (req, res) => {
     try {
         const removedAssets = await Equipment.find({
@@ -589,9 +658,6 @@ app.get('/api/equipment/removed', auth, async (req, res) => {
     }
 });
 
-// @route GET /api/equipment/count/:category
-// @desc Get equipment count by category (excluding soft-deleted)
-// @access Private
 app.get('/api/equipment/count/:category', auth, async (req, res) => {
     try {
         const count = await Equipment.countDocuments({
@@ -605,9 +671,6 @@ app.get('/api/equipment/count/:category', auth, async (req, res) => {
     }
 });
 
-// @route GET /api/equipment
-// @desc GET all equipment (that is NOT soft-deleted)
-// @access Private
 app.get('/api/equipment', auth, async (req, res) => {
     try {
         const equipment = await Equipment.find({ isDeleted: { $ne: true } }).sort({ createdAt: -1 });
@@ -618,14 +681,10 @@ app.get('/api/equipment', auth, async (req, res) => {
     }
 });
 
-// @route POST /api/equipment
-// @desc Add new equipment
-// @access Private (Admin, Editor)
 app.post('/api/equipment', [auth, requireRole(['Admin', 'Editor'])], async (req, res) => {
     const { assetId, category, status, model, serialNumber, warrantyInfo, location, comment,
             assigneeName, position, employeeEmail, phoneNumber, department, damageDescription, purchasePrice } = req.body;
 
-    // Convert warrantyInfo and purchaseDate to Date objects if they exist
     let parsedWarrantyInfo = null;
     if (warrantyInfo) {
         const mWarranty = moment(warrantyInfo);
@@ -663,20 +722,22 @@ app.post('/api/equipment', [auth, requireRole(['Admin', 'Editor'])], async (req,
             return res.status(400).json({ message: messages.join('. ') });
         }
         if (err.code === 11000) {
-            return res.status(400).json({ message: 'Duplicate asset ID. An asset with this ID already exists.' });
+            if (err.keyPattern && err.keyPattern.serialNumber) {
+                return res.status(400).json({ message: 'Serial Number already exists. Please use a unique serial number.' });
+            } else if (err.keyPattern && err.keyPattern.assetId) {
+                return res.status(400).json({ message: 'Asset ID already exists. Please use a unique asset ID.' });
+            } else {
+                return res.status(400).json({ message: 'Duplicate value. Please check your input.' });
+            }
         }
         console.error('Error in /api/equipment (POST):', err);
         res.status(500).json({ message: 'Server error while creating equipment.' });
     }
 });
 
-// @route PUT /api/equipment/:id
-// @desc Update existing equipment
-// @access Private (Admin, Editor)
 app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (req, res) => {
     const updateData = { ...req.body };
 
-    // Handle incoming date strings for warrantyInfo and purchaseDate
     if (updateData.warrantyInfo) {
         const mWarranty = moment(updateData.warrantyInfo);
         if (mWarranty.isValid()) {
@@ -701,12 +762,10 @@ app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (r
         updateData.purchaseDate = null;
     }
 
-    // Ensure damageDescription is cleared if status changes from Damaged
     if (req.body.status !== 'Damaged') {
         updateData.damageDescription = null;
     }
 
-    // Ensure comment is properly handled
     if (updateData.comment === "null") {
         updateData.comment = null;
     }
@@ -726,16 +785,19 @@ app.put('/api/equipment/:id', [auth, requireRole(['Admin', 'Editor'])], async (r
             return res.status(400).json({ message: messages.join('. ') });
         }
         if (err.code === 11000) {
-            return res.status(400).json({ message: 'Duplicate asset ID. An asset with this ID already exists.' });
+            if (err.keyPattern && err.keyPattern.serialNumber) {
+                return res.status(400).json({ message: 'Serial Number already exists. Please use a unique serial number.' });
+            } else if (err.keyPattern && err.keyPattern.assetId) {
+                return res.status(400).json({ message: 'Asset ID already exists. Please use a unique asset ID.' });
+            } else {
+                return res.status(400).json({ message: 'Duplicate value. Please check your input.' });
+            }
         }
         console.error('Error in /api/equipment/:id (PUT):', err.message, err);
         res.status(500).json({ message: 'Server error during equipment update.' });
     }
 });
 
-// @route DELETE /api/equipment/:id
-// @desc Soft delete equipment (mark as isDeleted: true)
-// @access Private (Admin only)
 app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res) => {
     try {
         const softDeletedEquipment = await Equipment.findByIdAndUpdate(
