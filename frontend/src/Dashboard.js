@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Card, Col, Row, Statistic, Typography, Spin, Alert, Button, Space, List, Tag } from 'antd';
+import { Card, Col, Row, Statistic, Typography, Spin, Alert, Button, Space, List } from 'antd';
 import {
     DatabaseOutlined, CheckCircleOutlined, ToolOutlined, WarningOutlined, DeleteOutlined,
-    LaptopOutlined, DesktopOutlined, AudioOutlined,
+    LaptopOutlined, DesktopOutlined, AudioOutlined, ReloadOutlined,
     // NEW ICONS FOR KEYBOARD AND MOUSE
     AimOutlined, BorderlessTableOutlined, // Used for Mouse and Keyboard respectively
     MinusCircleOutlined
-} from '@ant-design/icons'; // Ensure these icons are imported
+} from '@ant-design/icons';
 import axios from 'axios';
+import { message } from 'antd';
 import moment from 'moment';
 
 const { Title, Text } = Typography;
@@ -21,9 +22,8 @@ const getStatusColor = (status) => {
         'E-Waste': '#8B572A',  // Brown
         'Removed': '#555555' // Dark gray for Removed status
     };
-    return colors[status] || 'rgba(0, 0, 0, 0.85)'; // Default text color if no specific color is found
+    return colors[status] || 'rgba(0, 0, 0, 0.85)';
 };
-
 
 // --- Helper function for grouping and counting by category ---
 const summarizeByCategory = (assets) => {
@@ -65,8 +65,7 @@ const summarizeByCategory = (assets) => {
         categorySummary[category].total++;
     });
 
-    // Explicitly add desired categories to ensure they always show up, even with 0 items.
-    // ADDED 'Keyboard' to desiredCategories
+    // Explicitly add desired categories to ensure they always show up, even with 0 items
     const desiredCategories = ['Laptop', 'Headset', 'Mouse', 'Monitor', 'Keyboard'];
     desiredCategories.forEach(cat => {
         if (!categorySummary[cat]) {
@@ -94,16 +93,15 @@ const getCategoryIcon = (category) => {
         case 'Headset':
             return <AudioOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />;
         case 'Mouse':
-            return <AimOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />; // CHANGED to AimOutlined
-        case 'Keyboard': // ADDED 'Keyboard' case
-            return <BorderlessTableOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />; // CHANGED to BorderlessTableOutlined
+            return <AimOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />;
+        case 'Keyboard':
+            return <BorderlessTableOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />;
         case 'Monitor':
             return <DesktopOutlined style={{ fontSize: '48px', color: '#4A90E2' }} />;
         default:
             return <DatabaseOutlined style={{ fontSize: '48px', color: '#888' }} />;
     }
 };
-
 
 const Dashboard = () => {
     const [summaryData, setSummaryData] = useState({
@@ -117,6 +115,7 @@ const Dashboard = () => {
     const [categoryAssetSummaries, setCategoryAssetSummaries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [lastUpdated, setLastUpdated] = useState(null);
 
     const getAuthHeader = useCallback(() => {
         const token = localStorage.getItem('token');
@@ -127,12 +126,29 @@ const Dashboard = () => {
         setLoading(true);
         setError(null);
         try {
-            const summaryRes = await axios.get('http://localhost:5000/api/equipment/summary', { headers: getAuthHeader() });
-            setSummaryData(summaryRes.data);
+            const allAssetsRes = await axios.get('http://localhost:5000/api/equipment', {
+                headers: getAuthHeader(),
+                params: { _t: Date.now() }
+            });
 
-            const allAssetsRes = await axios.get('http://localhost:5000/api/equipment', { headers: getAuthHeader() });
-            const groupedSummary = summarizeByCategory(allAssetsRes.data);
+            const allAssets = allAssetsRes.data;
+
+            // Calculate summary data from actual assets
+            const calculatedSummary = {
+                totalAssets: allAssets.length,
+                inUse: allAssets.filter(asset => asset.status === 'In Use').length,
+                inStock: allAssets.filter(asset => asset.status === 'In Stock').length,
+                damaged: allAssets.filter(asset => asset.status === 'Damaged').length,
+                eWaste: allAssets.filter(asset => asset.status === 'E-Waste').length,
+                removed: allAssets.filter(asset => asset.status === 'Removed').length,
+            };
+
+            setSummaryData(calculatedSummary);
+
+            const groupedSummary = summarizeByCategory(allAssets);
             setCategoryAssetSummaries(groupedSummary);
+
+            setLastUpdated(new Date());
 
         } catch (err) {
             console.error('Failed to fetch dashboard data:', err.response ? err.response.data : err.message);
@@ -142,6 +158,16 @@ const Dashboard = () => {
         }
     }, [getAuthHeader]);
 
+    // Manual refresh function
+    const refreshDashboard = async () => {
+        try {
+            await fetchDashboardData();
+            message.success('Dashboard data refreshed successfully');
+        } catch (error) {
+            message.error('Failed to refresh dashboard data');
+        }
+    };
+
     useEffect(() => {
         fetchDashboardData();
     }, [fetchDashboardData]);
@@ -150,7 +176,10 @@ const Dashboard = () => {
         <div>
             {error && <Alert message="Error" description={error} type="error" showIcon style={{ marginBottom: '20px' }} />}
 
-            <Title level={3} style={{ marginBottom: '24px' }}>Dashboard Overview</Title>
+            {/* Header with Refresh Button */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                <Title level={3} style={{ margin: 0 }}>Dashboard Overview</Title>
+                           </div>
 
             {/* Top Row for Overall Summary Statistics */}
             <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>

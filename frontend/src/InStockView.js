@@ -502,14 +502,14 @@ const InStockView = ({ user }) => {
         <Form layout="vertical" form={form}>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item 
-                name="assigneeName" 
-                label="Assignee Name" 
+              <Form.Item
+                name="assigneeName"
+                label="Assignee Name"
                 rules={[
                   { required: true, message: 'Assignee name is required' },
-                  { 
-                    pattern: /^[a-zA-Z\s]+$/, 
-                    message: 'Name should contain only letters and spaces' 
+                  {
+                    pattern: /^[a-zA-Z\s]+$/,
+                    message: 'Name should contain only letters and spaces'
                   },
                   {
                     min: 2,
@@ -517,7 +517,7 @@ const InStockView = ({ user }) => {
                   }
                 ]}
               >
-                <Input 
+                <Input
                   disabled={user?.role === "Viewer"}
                   placeholder="Enter assignee name"
                   onKeyPress={(e) => {
@@ -549,18 +549,18 @@ const InStockView = ({ user }) => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item 
-                name="phoneNumber" 
-                label="Phone Number" 
+              <Form.Item
+                name="phoneNumber"
+                label="Phone Number"
                 rules={[
                   { required: true, message: 'Phone number is required' },
-                  { 
-                    pattern: /^[0-9]{10,15}$/, 
-                    message: 'Phone number must be 10-15 digits only' 
+                  {
+                    pattern: /^[0-9]{10,15}$/,
+                    message: 'Phone number must be 10-15 digits only'
                   }
                 ]}
               >
-                <Input 
+                <Input
                   disabled={user?.role === "Viewer"}
                   placeholder="Enter phone number (10-15 digits)"
                   maxLength={15}
