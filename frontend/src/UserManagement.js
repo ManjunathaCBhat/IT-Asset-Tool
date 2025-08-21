@@ -18,7 +18,7 @@ import {
   EditOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
-import './styles.css'; // Your shared styles
+import './styles.css';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -50,9 +50,9 @@ const UserManagement = () => {
       setUsers(res.data);
     } catch (err) {
       message.error(
-        err.response?.data?.msg ||
-        err.response?.data?.message ||
-        err.response?.data?.error ||
+        err?.response?.data?.msg ||
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
         'Failed to fetch users.'
       );
     }
@@ -85,11 +85,10 @@ const UserManagement = () => {
       setIsModalVisible(false);
       fetchUsers();
     } catch (err) {
-      console.log('Add user error:', err.response);
       message.error(
-        err.response?.data?.msg ||
-        err.response?.data?.message ||
-        err.response?.data?.error ||
+        err?.response?.data?.msg ||
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
         'Failed to create user.'
       );
     }
@@ -108,7 +107,7 @@ const UserManagement = () => {
     }, 0);
   };
 
-  // Edit user handler (all fields)
+  // Edit user handler
   const handleEditUser = async () => {
     try {
       const values = await formEdit.validateFields();
@@ -117,7 +116,6 @@ const UserManagement = () => {
         email: values.email,
         role: values.role
       };
-      // Only send password if it's not empty
       if (values.password && values.password.trim().length > 0) {
         payload.password = values.password;
       }
@@ -131,11 +129,10 @@ const UserManagement = () => {
       fetchUsers();
       formEdit.resetFields();
     } catch (err) {
-      console.log('Edit user error:', err.response);
       message.error(
-        err.response?.data?.msg ||
-        err.response?.data?.message ||
-        err.response?.data?.error ||
+        err?.response?.data?.msg ||
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
         'Failed to update user.'
       );
     }
@@ -151,9 +148,9 @@ const UserManagement = () => {
       fetchUsers();
     } catch (err) {
       message.error(
-        err.response?.data?.msg ||
-        err.response?.data?.message ||
-        err.response?.data?.error ||
+        err?.response?.data?.msg ||
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
         'Failed to delete user.'
       );
     }
@@ -184,7 +181,7 @@ const UserManagement = () => {
       title: 'Role',
       dataIndex: 'role',
       key: 'role',
-      width: 120
+      width:120
     },
     {
       title: 'Edit',
@@ -262,20 +259,41 @@ const UserManagement = () => {
         footer={null}
         destroyOnClose
       >
-        <Form form={form} layout="vertical" onFinish={handleAddUser}>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleAddUser}
+          autoComplete="off"
+        >
           <Form.Item
             name="name"
             label="Name"
-            rules={[{ required: true, message: "Please enter the user's name" }]}
+            rules={[
+              { required: true, message: "Please enter the user's name" },
+              { min: 4, message: 'Name must be at least 4 characters' }
+            ]}
           >
-            <Input />
+            <Input autoComplete="off" />
           </Form.Item>
           <Form.Item
             name="email"
             label="Email"
-            rules={[{ required: true, type: 'email', message: "Please enter a valid email" }]}
+            rules={[
+              { required: true, type: 'email', message: "Please enter a valid email" },
+              {
+                validator: (_, value) => {
+                  if (!value) return Promise.resolve();
+                  const emailExists = users.some(
+                    u => u.email.toLowerCase() === value.toLowerCase()
+                  );
+                  return emailExists
+                    ? Promise.reject(new Error('Email already exists'))
+                    : Promise.resolve();
+                }
+              }
+            ]}
           >
-            <Input />
+            <Input autoComplete="off" />
           </Form.Item>
           <Form.Item
             name="password"
@@ -284,7 +302,7 @@ const UserManagement = () => {
               { required: true, min: 6, message: "Password must be at least 6 characters" }
             ]}
           >
-            <Input.Password />
+            <Input.Password autoComplete="new-password" />
           </Form.Item>
           <Form.Item
             name="role"
@@ -310,7 +328,8 @@ const UserManagement = () => {
         </Form>
       </Modal>
 
-      {/* Edit User Modal (All Fields) */}
+      {/* Edit User Modal */}
+      {/* Edit User Modal */}
       <Modal
         title="Edit User"
         open={editModal.visible}
@@ -327,32 +346,56 @@ const UserManagement = () => {
           <Form
             form={formEdit}
             layout="vertical"
+            autoComplete="off"
             initialValues={{
               name: editModal.user.name,
               email: editModal.user.email,
-              password: '',
               role: editModal.user.role
             }}
           >
             <Form.Item
               label="Name"
               name="name"
-              rules={[{ required: true, message: "Please enter the user's name" }]}
+              rules={[
+                { required: true, message: "Please enter the user's name" },
+                { min: 4, message: 'Name must be at least 4 characters' }
+              ]}
             >
-              <Input />
+              <Input autoComplete="off" />
             </Form.Item>
             <Form.Item
               label="Email"
               name="email"
-              rules={[{ required: true, type: 'email', message: "Please enter a valid email" }]}
+              rules={[
+                { required: true, type: 'email', message: "Please enter a valid email" },
+                {
+                  validator: (_, value) => {
+                    if (!value) return Promise.resolve();
+                    // Exclude self from uniqueness check
+                    const editingId = editModal.user?._id;
+                    const emailExists = users.some(
+                      u => u.email.toLowerCase() === value.toLowerCase() && u._id !== editingId
+                    );
+                    return emailExists
+                      ? Promise.reject(new Error('Email already exists'))
+                      : Promise.resolve();
+                  }
+                }
+              ]}
             >
-              <Input />
+              <Input autoComplete="off" />
             </Form.Item>
-            
+            <Form.Item label="Password">
+              {/* Show stars, not editable */}
+              <Input.Password value="********" readOnly disabled style={{ color: '#aaa' }} />
+              <div style={{ color: '#d4380d', marginTop: '6px' }}>
+                You do not have rights to change the password.
+              </div>
+            </Form.Item>
             <Form.Item
-              label="Role"
               name="role"
-              rules={[{ required: true, message: 'Please select a role' }]}
+              label="Role"
+              rules={[{ required: true, message: "Please select a role" }]}
             >
               <Select placeholder="Select a role">
                 {roles.map(r => (
