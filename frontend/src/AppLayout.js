@@ -8,12 +8,14 @@ import {
     PlusOutlined, DatabaseOutlined, BellOutlined, UserOutlined,
     LogoutOutlined, TeamOutlined, CheckCircleOutlined,
     WarningOutlined, DeleteOutlined, SettingOutlined, MinusCircleOutlined, 
-    AppstoreOutlined, ReloadOutlined, ClockCircleOutlined
+    AppstoreOutlined, ReloadOutlined, ClockCircleOutlined, ClearOutlined
 } from '@ant-design/icons';
 import moment from 'moment';
 
+
 const { Header, Content } = Layout;
 const { Text } = Typography;
+
 
 // --- Helper for status colors (consistent across the app) ---
 const getStatusColor = (status) => {
@@ -28,6 +30,7 @@ const getStatusColor = (status) => {
     };
     return colors[status] || 'default';
 };
+
 
 // --- Helper function to get status tag color ---
 const getStatusTagColor = (status) => {
@@ -47,6 +50,7 @@ const getStatusTagColor = (status) => {
             return 'blue';
     }
 };
+
 
 // --- Helper function to determine the correct route based on asset status ---
 const getAssetRoute = (item) => {
@@ -68,6 +72,7 @@ const getAssetRoute = (item) => {
             return `/in-stock?${searchParams}`;
     }
 };
+
 
 // --- Logo Component ---
 const Logo = () => {
@@ -91,10 +96,19 @@ const Logo = () => {
     );
 };
 
-const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, lastUpdated }) => {
+
+const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, lastUpdated, clearAllNotifications }) => {
     const location = useLocation();
     const [refreshing, setRefreshing] = useState(false);
     const [popoverVisible, setPopoverVisible] = useState(false);
+    const [clearing, setClearing] = useState(false);
+
+    // Add persistent cleared notifications state
+    const [clearedNotifications, setClearedNotifications] = useState(() => {
+        const saved = localStorage.getItem('clearedNotifications');
+        return saved ? JSON.parse(saved) : [];
+    });
+
 
     // Manual refresh function
     const handleRefreshNotifications = async (e) => {
@@ -110,6 +124,34 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
         }
     };
 
+
+    // Updated clear all notifications function with persistence
+    const handleClearAllNotifications = async (e) => {
+        e.stopPropagation();
+        console.log('Clear All clicked - Current notifications:', expiringItems.length);
+        
+        setClearing(true);
+        try {
+            if (clearAllNotifications) {
+                await clearAllNotifications();
+            }
+            
+            // Save the cleared notification IDs to localStorage
+            const notificationIds = expiringItems.map(item => item.serialNumber || item.id);
+            const updatedCleared = [...clearedNotifications, ...notificationIds];
+            setClearedNotifications(updatedCleared);
+            localStorage.setItem('clearedNotifications', JSON.stringify(updatedCleared));
+            
+            message.success('All notifications cleared');
+        } catch (error) {
+            console.error('Failed to clear notifications:', error);
+            message.error('Failed to clear notifications');
+        } finally {
+            setClearing(false);
+        }
+    };
+
+
     // Define main navigation items for the top bar
     const mainNavItems = [
         { key: '/', icon: <AppstoreOutlined />, label: 'Dashboard', statusKey: 'Dashboard' },
@@ -119,6 +161,12 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
         { key: '/e-waste', icon: <DeleteOutlined />, label: 'E-Waste', statusKey: 'E-Waste' },
         { key: '/removed', icon: <MinusCircleOutlined />, label: 'Removed', statusKey: 'Removed' },
     ];
+
+    // Filter out cleared notifications
+    const filteredExpiringItems = expiringItems.filter(item => 
+        !clearedNotifications.includes(item.serialNumber || item.id)
+    );
+
 
     // Enhanced notification content with status display and improved navigation
     const notificationContent = (
@@ -161,9 +209,10 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                 </Tooltip>
             </div>
 
+
             {/* Scrollable Notifications List */}
             <div style={{ 
-                maxHeight: '320px', 
+                maxHeight: '280px',
                 overflowY: 'auto',
                 overflowX: 'hidden',
                 paddingRight: '4px',
@@ -188,8 +237,8 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                         }
                     `}
                 </style>
-                <div className="notification-scroll" style={{ maxHeight: '320px', overflowY: 'auto', paddingRight: '4px' }}>
-                    {expiringItems.length === 0 ? (
+                <div className="notification-scroll" style={{ maxHeight: '280px', overflowY: 'auto', paddingRight: '4px' }}>
+                    {filteredExpiringItems.length === 0 ? (
                         <div style={{ 
                             textAlign: 'center', 
                             padding: '40px 20px',
@@ -205,7 +254,7 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                         </div>
                     ) : (
                         <List
-                            dataSource={expiringItems}
+                            dataSource={filteredExpiringItems}
                             split={false}
                             renderItem={(item, index) => {
                                 const isExpired = moment(item.warrantyInfo).isBefore(moment());
@@ -216,7 +265,7 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                                     <List.Item 
                                         style={{ 
                                             padding: '12px 8px', 
-                                            borderBottom: index === expiringItems.length - 1 ? 'none' : '1px solid #f5f5f5',
+                                            borderBottom: index === filteredExpiringItems.length - 1 ? 'none' : '1px solid #f5f5f5',
                                             margin: '0',
                                             transition: 'background-color 0.2s ease'
                                         }}
@@ -340,12 +389,38 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                 </div>
             </div>
 
+
+            {/* Clear All Button Section */}
+            {filteredExpiringItems.length > 0 && (
+                <div style={{ 
+                    padding: '8px 0',
+                    borderTop: '1px solid #f0f0f0',
+                    borderBottom: '1px solid #f0f0f0',
+                    textAlign: 'center'
+                }}>
+                    <Button 
+                        type="text"
+                        size="small"
+                        icon={<ClearOutlined />}
+                        onClick={handleClearAllNotifications}
+                        loading={clearing}
+                        style={{
+                            color: '#ff4d4f',
+                            fontSize: '12px',
+                            fontWeight: '500'
+                        }}
+                        disabled={clearing}
+                    >
+                        {clearing ? 'Clearing...' : 'Clear All'}
+                    </Button>
+                </div>
+            )}
+
+
             {/* Footer with last updated time */}
             <div style={{ 
                 textAlign: 'center', 
                 padding: '10px 0 8px 0',
-                borderTop: '1px solid #f0f0f0',
-                marginTop: '8px',
                 backgroundColor: '#fafafa',
                 position: 'sticky',
                 bottom: 0,
@@ -358,6 +433,7 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
             </div>
         </div>
     );
+
 
     // Dynamic User Menu Items
     const getUserMenuItems = () => {
@@ -375,6 +451,7 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
             { key: 'divider-1', type: 'divider' },
         ];
 
+
         if (user?.role === 'Admin') {
             items.push({
                 key: 'user-management',
@@ -382,6 +459,7 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                 icon: <TeamOutlined />
             });
         }
+
 
         items.push(
             { key: 'divider-2', type: 'divider' },
@@ -394,6 +472,7 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
         );
         return items;
     };
+
 
     return (
         <Layout style={{ minHeight: '100vh' }}>
@@ -416,12 +495,14 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                     <Logo />
                 </div>
 
+
                 {/* Middle Section: Main Navigation Buttons & Add Equipment */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1 }}>
                     <Space size="middle">
                         {mainNavItems.map(item => {
                             const isActive = location.pathname === item.key;
                             const buttonColor = getStatusColor(item.statusKey);
+
 
                             return (
                                 <Link to={item.key} key={item.key}>
@@ -466,6 +547,7 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                     </Space>
                 </div>
 
+
                 {/* Right Section: Notifications and User Profile with Role */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                     <Popover 
@@ -480,31 +562,38 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
                         open={popoverVisible}
                         onOpenChange={setPopoverVisible}
                     >
-                        <div style={{ position: 'relative', cursor: 'pointer' }}>
-                            <Badge 
-                                count={expiringItems.length} 
-                                size="small"
-                            >
-                                <BellOutlined 
-                                    style={{ 
-                                        fontSize: '20px', 
-                                        cursor: 'pointer'
-                                    }} 
-                                />
-                            </Badge>
-                            {refreshing && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '-2px',
-                                    right: '-2px',
-                                    width: '12px',
-                                    height: '12px'
-                                }}>
-                                    <Spin size="small" />
-                                </div>
-                            )}
-                        </div>
+                        <Tooltip 
+                            title="Warranty Notifications" 
+                            placement="bottom"
+                            overlayInnerStyle={{ fontSize: '12px' }}
+                        >
+                            <div style={{ position: 'relative', cursor: 'pointer' }}>
+                                <Badge 
+                                    count={filteredExpiringItems.length} 
+                                    size="small"
+                                >
+                                    <BellOutlined 
+                                        style={{ 
+                                            fontSize: '20px', 
+                                            cursor: 'pointer'
+                                        }} 
+                                    />
+                                </Badge>
+                                {refreshing && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '-2px',
+                                        right: '-2px',
+                                        width: '12px',
+                                        height: '12px'
+                                    }}>
+                                        <Spin size="small" />
+                                    </div>
+                                )}
+                            </div>
+                        </Tooltip>
                     </Popover>
+
 
                     {/* Avatar with Role Below */}
                     <Dropdown menu={{ items: getUserMenuItems() }} placement="bottomRight">
@@ -540,5 +629,6 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
         </Layout>
     );
 };
+
 
 export default AppLayout;

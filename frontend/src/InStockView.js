@@ -29,8 +29,10 @@ import {
 import moment from 'moment';
 import './styles.css';
 
+
 const { Text, Title } = Typography;
 const { Option } = Select;
+
 
 const categoryOptions = [
   'Laptop', 'Headset', 'Keyboard', 'Mouse', 'Monitor', 'Other'
@@ -39,10 +41,12 @@ const locationOptions = [
   'Bangalore', 'Mangalore', 'Hyderabad', 'USA', 'Canada'
 ];
 
+
 const getAuthHeader = () => {
   const token = localStorage.getItem('token');
   return token ? { 'x-auth-token': token } : {};
 };
+
 
 const renderWarrantyTag = (date) => {
   if (!date) return <Text disabled>N/A</Text>;
@@ -59,6 +63,7 @@ const renderWarrantyTag = (date) => {
   return warrantyDate.format('DD MMM YYYY');
 };
 
+
 const groupAssetsByModel = (assets) => {
   const grouped = assets.reduce((acc, asset) => {
     const modelKey = asset.model || 'Unknown Model';
@@ -74,6 +79,7 @@ const groupAssetsByModel = (assets) => {
   }, {});
   return Object.values(grouped);
 };
+
 
 // ===== Helper functions for info table rows =====
 const getHardwareRows = (asset) => [
@@ -101,6 +107,7 @@ const getCommentsRows = (asset) => [
   ['Updated At', asset.updatedAt ? moment(asset.updatedAt).format('DD MMM YYYY HH:mm') : 'N/A'],
 ].filter(Boolean);
 
+
 const InStockView = ({ user }) => {
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
@@ -108,25 +115,31 @@ const InStockView = ({ user }) => {
   const [groupedList, setGroupedList] = useState([]);
   const [assetForInfoDetails, setAssetForInfoDetails] = useState(null);
 
+
   // Modal/form states
   const [isAssignModalVisible, setIsAssignModalVisible] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState(null);
   const [form] = Form.useForm();
   const [infoForm] = Form.useForm();
 
+
   const [isDetailsModalVisible, setIsDetailsModalVisible] = useState(false);
   const [detailsEquipment, setDetailsEquipment] = useState(null);
+
 
   const [isModelAssetsModalVisible, setIsModelAssetsModalVisible] = useState(false);
   const [selectedModelAssets, setSelectedModelAssets] = useState(null);
 
+
   const [confirmationConfig, setConfirmationConfig] = useState(null);
   const [isAnyModalOpen, setIsAnyModalOpen] = useState(false);
+
 
   // Edit Modal
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [selectedEditAsset, setSelectedEditAsset] = useState(null);
   const [editForm] = Form.useForm();
+
 
   useEffect(() => {
     setIsAnyModalOpen(
@@ -137,6 +150,7 @@ const InStockView = ({ user }) => {
       (confirmationConfig && confirmationConfig.visible)
     );
   }, [isAssignModalVisible, isDetailsModalVisible, isModelAssetsModalVisible, isEditModalVisible, confirmationConfig]);
+
 
   // Fetch in-stock assets from API
   const fetchInStockAssets = useCallback(async () => {
@@ -153,7 +167,9 @@ const InStockView = ({ user }) => {
     }
   }, []);
 
+
   useEffect(() => { fetchInStockAssets(); }, [fetchInStockAssets]);
+
 
   // Filter assets based on search input
   const handleSearch = (e) => {
@@ -167,14 +183,17 @@ const InStockView = ({ user }) => {
     setFilteredData(filtered);
   };
 
+
   useEffect(() => {
     setGroupedList(groupAssetsByModel(filteredData));
   }, [filteredData]);
+
 
   const handleViewModelAssets = (record) => {
     setSelectedModelAssets(record);
     setIsModelAssetsModalVisible(true);
   };
+
 
   const handleAssignClick = (record) => {
     setSelectedEquipment(record);
@@ -182,6 +201,7 @@ const InStockView = ({ user }) => {
     setIsAssignModalVisible(true);
     setConfirmationConfig(null);
   };
+
 
   const handleAssignSubmit = async () => {
     try {
@@ -201,11 +221,13 @@ const InStockView = ({ user }) => {
     }
   };
 
+
   const handleViewDetails = (record) => {
     setAssetForInfoDetails(record);
     setDetailsEquipment(record);
     setIsDetailsModalVisible(true);
   };
+
 
   const handleMoveStatus = async (record, newStatus) => {
     try {
@@ -222,6 +244,7 @@ const InStockView = ({ user }) => {
     }
   };
 
+
   // == Edit Section ==
   const handleEditAsset = (record) => {
     setSelectedEditAsset(record);
@@ -233,9 +256,11 @@ const InStockView = ({ user }) => {
     setIsEditModalVisible(true);
   };
 
+
   const handleSaveAssetEdit = async () => {
     try {
       const values = await editForm.validateFields();
+
 
       const updatedAsset = { ...values };
       // This is the key change:
@@ -244,7 +269,9 @@ const InStockView = ({ user }) => {
       if (updatedAsset.warrantyInfo && moment.isMoment(updatedAsset.warrantyInfo))
         updatedAsset.warrantyInfo = updatedAsset.warrantyInfo.format('YYYY-MM-DD');
 
+
       updatedAsset.status = "In Stock"; // Prevent editing status!
+
 
       await axios.put(
         `http://localhost:5000/api/equipment/${selectedEditAsset._id}`,
@@ -262,8 +289,10 @@ const InStockView = ({ user }) => {
   };
 
 
+
   const renderInStockActions = (record) => {
     const isViewer = user?.role === 'Viewer';
+
 
     const menuItems = [
       {
@@ -304,6 +333,7 @@ const InStockView = ({ user }) => {
       },
     ];
 
+
     return (
       <Space>
         <Button
@@ -332,6 +362,7 @@ const InStockView = ({ user }) => {
       </Space>
     );
   };
+
 
   const columns = [
     {
@@ -362,6 +393,7 @@ const InStockView = ({ user }) => {
     },
   ];
 
+
   const modelAssetListColumns = [
     {
       title: 'Sl No',
@@ -389,6 +421,7 @@ const InStockView = ({ user }) => {
     },
   ];
 
+
   return (
     <>
       <div className="page-header">
@@ -404,6 +437,7 @@ const InStockView = ({ user }) => {
         />
       </div>
 
+
       {/* Table with BLUR effect if any modal/popconfirm is open */}
       <div className={isAnyModalOpen ? "instock-blur" : ""}>
         <Table
@@ -414,6 +448,7 @@ const InStockView = ({ user }) => {
           scroll={{ x: 'max-content' }}
         />
       </div>
+
 
       {/* --- Modals --- */}
       <Modal
@@ -452,7 +487,8 @@ const InStockView = ({ user }) => {
         )}
       </Modal>
 
-      {/* Assign Modal */}
+
+      {/* Assign Modal with Updated Validation */}
       <Modal
         title={`Assign: ${selectedEquipment?.model || ''}`}
         open={isAssignModalVisible}
@@ -466,8 +502,36 @@ const InStockView = ({ user }) => {
         <Form layout="vertical" form={form}>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="assigneeName" label="Assignee Name" rules={[{ required: true }]}>
-                <Input disabled={user?.role === "Viewer"} />
+              <Form.Item 
+                name="assigneeName" 
+                label="Assignee Name" 
+                rules={[
+                  { required: true, message: 'Assignee name is required' },
+                  { 
+                    pattern: /^[a-zA-Z\s]+$/, 
+                    message: 'Name should contain only letters and spaces' 
+                  },
+                  {
+                    min: 2,
+                    message: 'Name must be at least 2 characters long'
+                  }
+                ]}
+              >
+                <Input 
+                  disabled={user?.role === "Viewer"}
+                  placeholder="Enter assignee name"
+                  onKeyPress={(e) => {
+                    // Allow only letters and spaces
+                    if (!/[a-zA-Z\s]/.test(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
+                  onChange={(e) => {
+                    // Remove any numbers or special characters
+                    const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                    form.setFieldsValue({ assigneeName: value });
+                  }}
+                />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -485,8 +549,33 @@ const InStockView = ({ user }) => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="phoneNumber" label="Phone Number" rules={[{ required: true }]}>
-                <Input disabled={user?.role === "Viewer"} />
+              <Form.Item 
+                name="phoneNumber" 
+                label="Phone Number" 
+                rules={[
+                  { required: true, message: 'Phone number is required' },
+                  { 
+                    pattern: /^[0-9]{10,15}$/, 
+                    message: 'Phone number must be 10-15 digits only' 
+                  }
+                ]}
+              >
+                <Input 
+                  disabled={user?.role === "Viewer"}
+                  placeholder="Enter phone number (10-15 digits)"
+                  maxLength={15}
+                  onKeyPress={(e) => {
+                    // Allow only digits
+                    if (!/[0-9]/.test(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
+                  onChange={(e) => {
+                    // Remove any non-digit characters
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    form.setFieldsValue({ phoneNumber: value });
+                  }}
+                />
               </Form.Item>
             </Col>
             <Col span={24}>
@@ -497,6 +586,7 @@ const InStockView = ({ user }) => {
           </Row>
         </Form>
       </Modal>
+
 
       {/* Edit Modal */}
       <Modal
@@ -574,6 +664,7 @@ const InStockView = ({ user }) => {
         </Form>
       </Modal>
 
+
       {/* =========== Details Modal: TABLE BASED =========== */}
       <Modal
         title={`Equipment Details: ${detailsEquipment?.model || ''}`}
@@ -604,6 +695,7 @@ const InStockView = ({ user }) => {
             />
 
 
+
             <Title level={5} className="comments-section-title">
               Comments & Audit Trail
             </Title>
@@ -624,6 +716,7 @@ const InStockView = ({ user }) => {
         )}
       </Modal>
 
+
       {confirmationConfig && (
         <Popconfirm
           title={confirmationConfig.title}
@@ -640,5 +733,6 @@ const InStockView = ({ user }) => {
     </>
   );
 };
+
 
 export default InStockView;
