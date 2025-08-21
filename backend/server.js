@@ -561,6 +561,30 @@ app.get('/api/equipment/expiring-warranty/debug', auth, async (req, res) => {
     }
 });
 
+// In your backend API
+app.get('/api/equipment/debug-counts', async (req, res) => {
+    try {
+        const allEquipment = await Equipment.find({});
+        const counts = {
+            total: allEquipment.length,
+            inUse: allEquipment.filter(item => item.status === 'In Use').length,
+            inStock: allEquipment.filter(item => item.status === 'In Stock').length,
+            damaged: allEquipment.filter(item => item.status === 'Damaged').length,
+            eWaste: allEquipment.filter(item => item.status === 'E-Waste').length,
+            removed: allEquipment.filter(item => item.status === 'Removed').length,
+        };
+        
+        res.json({
+            counts,
+            removedItems: allEquipment
+                .filter(item => item.status === 'Removed')
+                .map(item => ({ id: item._id, model: item.model, serialNumber: item.serialNumber }))
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/api/equipment/grouped-by-email', auth, async (req, res) => {
     try {
         const groupedData = await Equipment.aggregate([
