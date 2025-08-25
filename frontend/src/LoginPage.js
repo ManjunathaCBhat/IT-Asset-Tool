@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { message } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { EyeOutlined, EyeInvisibleOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 
 const LoginPage = ({ onLogin }) => {
     const [email, setEmail] = useState('');
@@ -13,17 +13,11 @@ const LoginPage = ({ onLogin }) => {
     const [signInButtonHovered, setSignInButtonHovered] = useState(false);
     const [forgotButtonHovered, setForgotButtonHovered] = useState(false);
 
-    // Forgot Password States
+    // Forgot Password States - using your email form approach
     const [showForgotModal, setShowForgotModal] = useState(false);
-    const [forgotStep, setForgotStep] = useState(1);
     const [forgotEmail, setForgotEmail] = useState('');
-    const [resetToken, setResetToken] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [showNewPassword, setShowNewPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [forgotLoading, setForgotLoading] = useState(false);
-    const [forgotError, setForgotError] = useState('');
+    const [forgotStatus, setForgotStatus] = useState(''); // Changed from forgotError to forgotStatus
 
     // Screen size tracking
     const [screenSize, setScreenSize] = useState({
@@ -51,7 +45,6 @@ const LoginPage = ({ onLogin }) => {
 
         window.addEventListener('resize', handleResize);
         window.addEventListener('orientationchange', handleResize);
-
         return () => {
             window.removeEventListener('resize', handleResize);
             window.removeEventListener('orientationchange', handleResize);
@@ -93,7 +86,6 @@ const LoginPage = ({ onLogin }) => {
             update() {
                 if (this.x + this.size > canvas.width || this.x - this.size < 0) this.directionX = -this.directionX;
                 if (this.y + this.size > canvas.height || this.y - this.size < 0) this.directionY = -this.directionY;
-
                 this.x += this.directionX;
                 this.y += this.directionY;
 
@@ -112,7 +104,6 @@ const LoginPage = ({ onLogin }) => {
                 } else if (this.size > this.baseSize) {
                     this.size -= 0.1;
                 }
-
                 this.draw();
             }
         }
@@ -135,7 +126,6 @@ const LoginPage = ({ onLogin }) => {
                 particlesArray.push(new Particle(x, y, directionX, directionY, size, color));
             }
         }
-
         function connect() {
             const maxDistance = isMobile ? 80 : 120;
             for (let a = 0; a < particlesArray.length; a++) {
@@ -168,23 +158,19 @@ const LoginPage = ({ onLogin }) => {
             setCanvasSize();
             init();
         };
-
         const handleMouseMove = (event) => {
             if (!isMobile) {
                 mouse.current.x = event.x;
                 mouse.current.y = event.y;
             }
         };
-
         const handleMouseOut = () => {
             mouse.current.x = null;
             mouse.current.y = null;
         };
-
         setCanvasSize();
         init();
         animate();
-
         window.addEventListener('resize', handleCanvasResize);
         if (!isMobile) {
             canvas.addEventListener('mousemove', handleMouseMove);
@@ -218,100 +204,70 @@ const LoginPage = ({ onLogin }) => {
         }
     };
 
-    // Forgot Password Functions
+    // Forgot Password Functions - Updated to use your email sending approach
     const handleForgotPasswordClick = () => {
         setShowForgotModal(true);
-        setForgotStep(1);
         setForgotEmail('');
-        setResetToken('');
-        setNewPassword('');
-        setConfirmPassword('');
-        setForgotError('');
+        setForgotStatus('');
     };
 
     const closeForgotModal = () => {
         setShowForgotModal(false);
-        setForgotStep(1);
         setForgotEmail('');
-        setResetToken('');
-        setNewPassword('');
-        setConfirmPassword('');
-        setForgotError('');
+        setForgotStatus('');
     };
 
-    const handleRequestReset = async (e) => {
-        e.preventDefault();
-        setForgotLoading(true);
-        setForgotError('');
-
+    // Send password reset email using your email form approach
+    const sendPasswordResetEmail = async () => {
         if (!forgotEmail) {
-            setForgotError('Please enter your email address.');
-            setForgotLoading(false);
+            setForgotStatus('Please enter your email address.');
             return;
         }
 
         const emailRegex = /\S+@\S+\.\S+/;
         if (!emailRegex.test(forgotEmail)) {
-            setForgotError('Please enter a valid email address.');
-            setForgotLoading(false);
+            setForgotStatus('Please enter a valid email address.');
             return;
         }
 
-        try {
-            const response = await axios.post('http://localhost:5000/api/forgot-password', {
-                email: forgotEmail
-            });
-
-            if (response.data.success) {
-                message.success('Reset token sent! Please check your inbox and spam folder. ' +
-        'If using a work email, contact your IT department if the email doesn\'t arrive.');
-                setForgotStep(2);
-            }
-        } catch (err) {
-            const errorMessage = err.response?.data?.message || 'Failed to send reset email. Please try again.';
-            setForgotError(errorMessage);
-        } finally {
-            setForgotLoading(false);
-        }
-    };
-
-    const handleResetPassword = async (e) => {
-        e.preventDefault();
         setForgotLoading(true);
-        setForgotError('');
-
-        if (!resetToken || !newPassword || !confirmPassword) {
-            setForgotError('Please fill in all fields.');
-            setForgotLoading(false);
-            return;
-        }
-
-        if (newPassword !== confirmPassword) {
-            setForgotError('Passwords do not match.');
-            setForgotLoading(false);
-            return;
-        }
-
-        if (newPassword.length < 6) {
-            setForgotError('Password must be at least 6 characters long.');
-            setForgotLoading(false);
-            return;
-        }
+        setForgotStatus('');
 
         try {
-            const response = await axios.post('http://localhost:5000/api/reset-password', {
-                email: forgotEmail,
-                token: resetToken,
-                newPassword: newPassword
+            // Generate reset link (you can customize this URL)
+            const resetLink = `${window.location.origin}/reset-password?token=temp-token&email=${encodeURIComponent(forgotEmail)}`;
+            
+            // Create password reset message
+            const resetMessage = `Hello,
+
+You requested to reset your password for the IT Asset Management Dashboard.
+
+Click the link below to reset your password:
+${resetLink}
+
+If you didn't request this password reset, please ignore this email.
+
+This link will expire in 1 hour for security reasons.
+
+Best regards,
+IT Department`;
+
+            // Send email using your email endpoint format
+            const res = await axios.post("http://localhost:5000/send-email", {
+                to: forgotEmail,
+                subject: "Password Reset Request - IT Asset Management",
+                message: resetMessage,
             });
 
-            if (response.data.success) {
-                message.success('Password reset successfully! You can now login with your new password.');
+            setForgotStatus(res.data.message || "Email sent successfully!");
+            
+            // Auto close modal after 3 seconds on success
+            setTimeout(() => {
                 closeForgotModal();
-            }
-        } catch (err) {
-            const errorMessage = err.response?.data?.message || 'Failed to reset password. Please check your token and try again.';
-            setForgotError(errorMessage);
+            }, 3000);
+
+        } catch (error) {
+            setForgotStatus("Error sending email: " + (error.response?.data?.message || error.message));
         } finally {
             setForgotLoading(false);
         }
@@ -438,7 +394,7 @@ const LoginPage = ({ onLogin }) => {
             marginBottom: '0.5rem'
         },
 
-        // Input
+        // Input with focus styles
         input: {
             padding: isSmallMobile ? '10px 12px' : '12px 15px',
             width: '100%',
@@ -449,10 +405,10 @@ const LoginPage = ({ onLogin }) => {
             fontSize: '14px',
             color: '#000929',
             outline: 'none',
-            transition: 'border-color 0.3s ease'
+            transition: 'border-color 0.3s ease, box-shadow 0.3s ease'
         },
 
-        // Password input
+        // Password input with focus styles
         passwordInput: {
             padding: isSmallMobile ? '10px 40px 10px 12px' : '12px 45px 12px 15px',
             width: '100%',
@@ -463,7 +419,7 @@ const LoginPage = ({ onLogin }) => {
             fontSize: '14px',
             color: '#000929',
             outline: 'none',
-            transition: 'border-color 0.3s ease'
+            transition: 'border-color 0.3s ease, box-shadow 0.3s ease'
         },
 
         // Eye icon
@@ -486,6 +442,15 @@ const LoginPage = ({ onLogin }) => {
             textAlign: 'center',
             margin: '0 0 1rem 0',
             minHeight: '15px'
+        },
+
+        // Status message (for forgot password)
+        status: {
+            fontSize: '12px',
+            textAlign: 'center',
+            margin: '0 0 1rem 0',
+            minHeight: '15px',
+            color: forgotStatus.includes('Error') ? '#D5292B' : '#52c41a'
         },
 
         // Primary button
@@ -580,25 +545,6 @@ const LoginPage = ({ onLogin }) => {
             transition: 'background-color 0.3s ease'
         },
 
-        modalBackButton: {
-            position: 'absolute',
-            top: '10px',
-            left: '15px',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '20px',
-            color: '#296bd5ff',
-            width: '40px',
-            height: '40px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: '50%',
-            zIndex: 10,
-            transition: 'background-color 0.3s ease'
-        },
-
         // Content wrapper inside modal
         modalContentWrapper: {
             width: '100%',
@@ -607,13 +553,25 @@ const LoginPage = ({ onLogin }) => {
         },
 
         required: {
-        color: '#ff4d4f',
-        marginLeft: '2px'
+            color: '#ff4d4f',
+            marginLeft: '2px'
         }
     };
 
     return (
         <div style={styles.container}>
+            {/* Embedded styles for focus */}
+            <style>{`
+                .login-input:focus {
+                    border-color: #296bd5ff !important;
+                    box-shadow: 0 0 0 2px rgba(41, 107, 213, 0.2) !important;
+                }
+                .login-password-input:focus {
+                    border-color: #296bd5ff !important;
+                    box-shadow: 0 0 0 2px rgba(41, 107, 213, 0.2) !important;
+                }
+            `}</style>
+
             {/* Left Panel */}
             <div style={styles.leftPanel}>
                 <canvas ref={canvasRef} style={styles.canvas} />
@@ -635,43 +593,44 @@ const LoginPage = ({ onLogin }) => {
                     <h2 style={styles.heading}>IT Department Login</h2>
                     
                     <form onSubmit={handleLogin}>
-             {/* Email Field */}
-<div style={styles.inputContainer}>
-    <label style={styles.label}>
-        Email Address<span style={styles.required}>*</span>
-    </label>
-    <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="Enter your email"
-        required={true}
-        style={styles.input}
-    />
-</div>
+                        {/* Email Field */}
+                        <div style={styles.inputContainer}>
+                            <label style={styles.label}>
+                                Email Address<span style={styles.required}>*</span>
+                            </label>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="Enter your email"
+                                required={true}
+                                style={styles.input}
+                                className="login-input"
+                            />
+                        </div>
 
-{/* Password Field */}
-<div style={styles.inputContainer}>
-    <label style={styles.label}>
-        Password<span style={styles.required}>*</span>
-    </label>
-    <input
-        type={showPassword ? 'text' : 'password'}
-        style={styles.passwordInput}
-        value={password}
-        onChange={e => setPassword(e.target.value)}
-        placeholder="Enter your password"
-        required={true}
-    />
-    <span
-        onClick={() => setShowPassword(!showPassword)}
-        style={styles.eyeIcon}
-    >
-        {showPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-    </span>
-</div>
+                        {/* Password Field */}
+                        <div style={styles.inputContainer}>
+                            <label style={styles.label}>
+                                Password<span style={styles.required}>*</span>
+                            </label>
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                style={styles.passwordInput}
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                                placeholder="Enter your password"
+                                required={true}
+                                className="login-password-input"
+                            />
+                            <span
+                                onClick={() => setShowPassword(!showPassword)}
+                                style={styles.eyeIcon}
+                            >
+                                {showPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+                            </span>
+                        </div>
 
-                        
                         <div style={styles.error}>{error}</div>
                         
                         <button
@@ -697,7 +656,7 @@ const LoginPage = ({ onLogin }) => {
                 </div>
             </div>
 
-            {/* Forgot Password Modal */}
+            {/* Forgot Password Modal - using your email form approach */}
             {showForgotModal && (
                 <div style={styles.modalOverlay} onClick={closeForgotModal}>
                     <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -711,110 +670,32 @@ const LoginPage = ({ onLogin }) => {
                         >
                             ×
                         </button>
-                        
-                        {/* Back Button */}
-                        {forgotStep === 2 && (
-                            <button 
-                                style={styles.modalBackButton} 
-                                onClick={() => setForgotStep(1)}
-                                onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f8ff'}
-                                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                            >
-                                <ArrowLeftOutlined />
-                            </button>
-                        )}
 
                         <div style={styles.modalContentWrapper}>
-                            {forgotStep === 1 ? (
-                                <>
-                                    <h3 style={{...styles.heading, marginBottom: '1.5rem'}}>Reset Password </h3>
-                                    <form onSubmit={handleRequestReset}>
-                                        <div style={styles.inputContainer}>
-                                            <label style={styles.label}>Email Address<span style={styles.required}>*</span></label>
-                                            <input
-                                                type="email"
-                                                value={forgotEmail}
-                                                onChange={(e) => setForgotEmail(e.target.value)}
-                                                placeholder="Enter your email"
-                                                required = {true}
-                                                style={styles.input}
-                                            />
-                                        </div>
-                                        <div style={styles.error}>{forgotError}</div>
-                                        <button
-                                            type="submit"
-                                            style={{...styles.primaryButton, backgroundColor: '#296bd5ff'}}
-                                            disabled={forgotLoading}
-                                        >
-                                            {forgotLoading ? 'Sending...' : 'Send Reset Token'}
-                                        </button>
-                                    </form>
-                                </>
-                            ) : (
-                                <>
-                                    <h3 style={{...styles.heading, marginBottom: '1.5rem'}}>Enter New Password</h3>
-                                    <form onSubmit={handleResetPassword}>
-                                        <div style={styles.inputContainer}>
-                                     <label style={styles.label}>
-                                       Reset Token<span style={styles.required}>*</span>
-                                    </label>
+                            <h3 style={{...styles.heading, marginBottom: '1.5rem'}}>Reset Password</h3>
+                            
+                            <div style={styles.inputContainer}>
+                                <label style={styles.label}>Email Address<span style={styles.required}>*</span></label>
                                 <input
-                                    type="text"
-                                    value={resetToken}  // Make sure this is resetToken, not forgotEmail
-                                    onChange={(e) => setResetToken(e.target.value)}
-                                    placeholder="Enter the token from your email"
-                                    required
-                                    style={styles.input}  // Use regular input style, not passwordInput
-                                    autoComplete="off"
-                                 />
-                                </div>
-
-                                        <div style={styles.inputContainer}>
-                                            <label style={styles.label}>New Password<span style={styles.required}>*</span></label>
-                                            <input
-                                                type={showNewPassword ? 'text' : 'password'}
-                                                value={newPassword}
-                                                onChange={(e) => setNewPassword(e.target.value)}
-                                                placeholder="Enter new password"
-                                                required
-                                                style={styles.passwordInput}
-                                                autoComplete="new-password"
-                                            />
-                                            <span
-                                                onClick={() => setShowNewPassword(!showNewPassword)}
-                                                style={styles.eyeIcon}
-                                            >
-                                                {showNewPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-                                            </span>
-                                        </div>
-                                        <div style={styles.inputContainer}>
-                                            <label style={styles.label}>Confirm New Password<span style={styles.required}>*</span></label>
-                                            <input
-                                                type={showConfirmPassword ? 'text' : 'password'}
-                                                value={confirmPassword}
-                                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                                placeholder="Confirm new password"
-                                                required = {true}
-                                                style={styles.passwordInput}
-                                            />
-                                            <span
-                                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                                style={styles.eyeIcon}
-                                            >
-                                                {showConfirmPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-                                            </span>
-                                        </div>
-                                        <div style={styles.error}>{forgotError}</div>
-                                        <button
-                                            type="submit"
-                                            style={{...styles.primaryButton, backgroundColor: '#296bd5ff'}}
-                                            disabled={forgotLoading}
-                                        >
-                                            {forgotLoading ? 'Resetting...' : 'Reset Password'}
-                                        </button>
-                                    </form>
-                                </>
-                            )}
+                                    type="email"
+                                    value={forgotEmail}
+                                    onChange={(e) => setForgotEmail(e.target.value)}
+                                    placeholder="Enter your email"
+                                    style={styles.input}
+                                    className="login-input"
+                                />
+                            </div>
+                            
+                            <div style={styles.status}>{forgotStatus}</div>
+                            
+                            <button
+                                type="button"
+                                onClick={sendPasswordResetEmail}
+                                style={{...styles.primaryButton, backgroundColor: '#296bd5ff'}}
+                                disabled={forgotLoading}
+                            >
+                                {forgotLoading ? 'Sending...' : 'Send Reset Email'}
+                            </button>
                         </div>
                     </div>
                 </div>

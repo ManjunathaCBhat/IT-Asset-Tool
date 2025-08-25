@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Table, Typography, message, Input, Space, Popconfirm, Button } from 'antd';
-import { DeleteOutlined } from '@ant-design/icons';
+import { DeleteOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import './styles.css'; // Import CSS with your layout styles
 // import { validateSearchText } from './validation'; // Use if you want custom search validation
@@ -95,7 +95,7 @@ const EWaste = ({ user }) => {
         { title: 'Category', dataIndex: 'category', key: 'category' },
         { title: 'Model', dataIndex: 'model', key: 'model' },
         { title: 'Serial Number', dataIndex: 'serialNumber', key: 'serialNumber' },
-        { title: 'Comment', dataIndex: 'comment', key: 'comment' },
+        { title: 'Comment', dataIndex: 'comment', key: 'comment',render: (text) => text || 'null' },
         {
             title: 'Action',
             key: 'action',
@@ -110,7 +110,8 @@ const EWaste = ({ user }) => {
                     <Button
                         type="link"
                         danger
-                        icon={<DeleteOutlined />}
+                        icon={<MinusCircleOutlined />}
+                        title='Move to Removed'
                         disabled={user?.role === "Viewer"}
                     >
                         Remove

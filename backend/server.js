@@ -4,74 +4,88 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto'); // Add this for generating reset tokens
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
-const moment = require('moment'); // Import moment for date calculations
-
-// Add SendGrid import
-const sgMail = require('@sendgrid/mail');
+const moment = require('moment');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // --- Middleware ---
 app.use(cors());
-app.use(express.json()); // For parsing application/json
+app.use(express.json());
 
 // --- Database Connection ---
 const MONGO_URI = process.env.MONGO_URI;
 // --- JWT Secret ---
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// --- SendGrid Setup ---
-// Initialize SendGrid with error checking
-if (!process.env.SENDGRID_API_KEY) {
-    console.error('SENDGRID_API_KEY not found in environment variables');
-} else if (!process.env.SENDGRID_API_KEY.startsWith('SG.')) {
-    console.error('SENDGRID_API_KEY does not start with "SG."');
-} else {
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    console.log('SendGrid initialized successfully');
-}
+// --- Nodemailer Setup ---
+const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT),
+    secure: false, // true for 465, false for other ports
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+    },
+});
 
-// --- SendGrid Email Function ---
+// Test transporter configuration
+transporter.verify(function (error, success) {
+    if (error) {
+        console.error('SMTP configuration error:', error);
+    } else {
+        console.log('SMTP server is ready to take our messages');
+    }
+});
+
+// Store reset tokens temporarily (in production, use Redis or database)
+const resetTokens = new Map();
+
+// --- Email function ---
 const sendResetEmail = async (email, resetToken) => {
-    const msg = {
+    // Create reset link
+    const resetLink = `http://localhost:3000/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+
+    const mailOptions = {
+        from: `"IT Asset Management" <${process.env.SMTP_USER}>`,
         to: email,
-        from: {
-            email: process.env.SENDGRID_FROM_EMAIL,
-            name: 'IT Asset Management'
-        },
         subject: 'Password Reset Request - IT Asset Management',
-        text: `Your password reset token is: ${resetToken}\n\nThis token expires in 1 hour.`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #2C4B84;">Password Reset Request</h2>
-                <p>You requested a password reset for your IT Asset Management account.</p>
-                <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                    <p style="margin: 0;"><strong>Your reset token:</strong></p>
-                    <p style="font-size: 18px; font-weight: bold; color: #296bd5; margin: 10px 0; font-family: monospace;">${resetToken}</p>
+                <p>Hello,</p>
+                <p>You have requested to reset your password for the IT Asset Management system.</p>
+                <p>Please click the button below to reset your password:</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${resetLink}" 
+                       style="background-color: #296bd5; color: white; padding: 12px 30px; 
+                              text-decoration: none; border-radius: 8px; font-weight: bold;
+                              display: inline-block;">
+                        Reset Password
+                    </a>
                 </div>
-                <p><strong>This token expires in 1 hour.</strong></p>
-                <p>If you didn't request this, please ignore this email.</p>
+                <p>Or copy and paste this link in your browser:</p>
+                <p style="word-break: break-all; color: #666;">${resetLink}</p>
+                <p><strong>This link will expire in 1 hour.</strong></p>
+                <p>If you did not request this password reset, please ignore this email.</p>
+                <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+                <p style="color: #666; font-size: 12px;">
+                    This is an automated message from IT Asset Management System.
+                </p>
             </div>
-        `
+        `,
     };
 
     try {
         console.log('Attempting to send email to:', email);
-        console.log('From email:', process.env.SENDGRID_FROM_EMAIL);
-
-        const result = await sgMail.send(msg);
-        console.log('Email sent successfully:', result[0].statusCode);
+        const result = await transporter.sendMail(mailOptions);
+        console.log('Email sent successfully:', result.messageId);
         return { success: true };
     } catch (error) {
-        console.error('SendGrid Error Details:');
-        console.error('Error message:', error.message);
-        if (error.response) {
-            console.error('Status code:', error.response.status);
-            console.error('Response body:', JSON.stringify(error.response.body, null, 2));
-        }
+        console.error('Email sending failed:', error);
         return { success: false, error: error.message };
     }
 };
@@ -100,7 +114,7 @@ const EquipmentSchema = new mongoose.Schema({
     category: { type: String, required: true },
     status: { type: String, required: true, enum: ['In Use', 'In Stock', 'Damaged', 'E-Waste', 'Removed'] },
     model: { type: String },
-    serialNumber: { type: String, unique: true }, // Made unique
+    serialNumber: { type: String, unique: true },
     warrantyInfo: { type: Date },
     location: { type: String },
     comment: { type: String },
@@ -153,7 +167,6 @@ const cleanupDuplicateSerialNumbers = async () => {
         }
 
         for (const duplicate of duplicates) {
-            // Keep the first document, update others with unique serial numbers
             const idsToUpdate = duplicate.ids.slice(1);
 
             for (let i = 0; i < idsToUpdate.length; i++) {
@@ -179,12 +192,10 @@ const ensureIndexes = async () => {
     } catch (error) {
         console.error('Error synchronizing indexes:', error);
 
-        // If index creation fails due to duplicates, try to fix them
         if (error.code === 11000) {
             console.log('Duplicate key error detected. Attempting to clean up duplicates...');
             await cleanupDuplicateSerialNumbers();
 
-            // Try to sync indexes again after cleanup
             try {
                 await Equipment.syncIndexes();
                 console.log('Equipment indexes synchronized successfully after cleanup');
@@ -256,21 +267,43 @@ const requireRole = (roles) => (req, res, next) => {
 
 // --- API Endpoints ---
 
-// --- Test SendGrid Endpoint (for debugging) ---
-app.get('/test-sendgrid', async (req, res) => {
+// --- SEND EMAIL ENDPOINT (Your email form functionality) ---
+app.post("/send-email", async (req, res) => {
+    const { to, subject, message } = req.body;
+    
     try {
-        const msg = {
-            to: 'your-test-email@domain.com',
-            from: process.env.SENDGRID_FROM_EMAIL,
-            subject: 'SendGrid Test',
-            text: 'Testing SendGrid connection from server'
+        await transporter.sendMail({
+            from: `"IT Department" <${process.env.SMTP_USER}>`,
+            to,
+            subject,
+            text: message,
+            html: `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${message}</pre>`,
+        });
+        
+        res.json({ message: "Email sent successfully!" });
+    } catch (error) {
+        console.error('Send email error:', error);
+        res.status(500).json({ message: "Failed to send email", error: error.message });
+    }
+});
+
+// --- Test Email Endpoint (for debugging) ---
+app.get('/test-email', async (req, res) => {
+    try {
+        const mailOptions = {
+            from: `"IT Asset Management Test" <${process.env.SMTP_USER}>`,
+            to: 'your-test-email@example.com', // Change this to your email
+            subject: 'SMTP Test Email',
+            text: 'If you receive this email, your SMTP configuration is working correctly!'
         };
 
-        console.log('Testing SendGrid with:');
-        console.log('To:', msg.to);
-        console.log('From:', msg.from);
+        console.log('Testing SMTP with:');
+        console.log('Host:', process.env.SMTP_HOST);
+        console.log('Port:', process.env.SMTP_PORT);
+        console.log('User:', process.env.SMTP_USER);
+        console.log('To:', mailOptions.to);
 
-        await sgMail.send(msg);
+        await transporter.sendMail(mailOptions);
         res.json({ success: true, message: 'Test email sent successfully!' });
     } catch (error) {
         console.error('Test email failed:', error.message);
@@ -311,17 +344,20 @@ app.post('/api/forgot-password', async (req, res) => {
             });
         }
 
-        const resetToken = crypto.randomBytes(20).toString('hex');
-        user.resetPasswordToken = resetToken;
-        user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
-        await user.save();
+        // Generate secure reset token
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const expiry = Date.now() + 3600000; // 1 hour expiry
 
+        // Store token with expiry
+        resetTokens.set(resetToken, { email, expiry });
+
+        // Send email with reset link
         const emailResult = await sendResetEmail(email, resetToken);
 
         if (emailResult.success) {
             res.json({
                 success: true,
-                message: 'Password reset email sent successfully.'
+                message: 'Password reset link sent to your email successfully.'
             });
         } else {
             res.status(500).json({
@@ -341,33 +377,59 @@ app.post('/api/forgot-password', async (req, res) => {
 
 // --- RESET PASSWORD ENDPOINT ---
 app.post('/api/reset-password', async (req, res) => {
-    console.log('Reset password request body:', req.body);
     const { email, token, newPassword } = req.body;
-    try {
-        const user = await User.findOne({
-            email,
-            resetPasswordToken: token,
-            resetPasswordExpires: { $gt: Date.now() }
-        });
+    console.log('Reset password request for:', email);
 
-        if (!user) {
-            return res.status(400).json({
-                success: false,
-                message: 'Password reset token is invalid or has expired.'
+    try {
+        // Verify token exists and hasn't expired
+        const tokenData = resetTokens.get(token);
+        
+        if (!tokenData) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Invalid or expired reset token" 
             });
         }
 
+        if (tokenData.expiry < Date.now()) {
+            resetTokens.delete(token);
+            return res.status(400).json({ 
+                success: false, 
+                message: "Reset token has expired" 
+            });
+        }
+
+        if (tokenData.email !== email) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Invalid token for this email address" 
+            });
+        }
+
+        // Find user and update password
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found.'
+            });
+        }
+
+        // Hash new password and save
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(newPassword, salt);
         user.resetPasswordToken = undefined;
         user.resetPasswordExpires = undefined;
-
         await user.save();
+
+        // Remove used token
+        resetTokens.delete(token);
 
         res.json({
             success: true,
-            message: 'Password has been reset successfully.'
+            message: 'Password reset successfully!'
         });
+
     } catch (err) {
         console.error('Reset password error:', err.message);
         res.status(500).json({
@@ -451,7 +513,7 @@ app.delete('/api/users/:id', [auth, requireRole(['Admin'])], async (req, res) =>
     }
 });
 
-// --- Equipment Endpoints ---
+// --- Equipment Endpoints (keeping all your existing endpoints) ---
 
 app.get('/api/equipment/summary', auth, async (req, res) => {
     try {
