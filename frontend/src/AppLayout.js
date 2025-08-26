@@ -105,7 +105,8 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
 
     // Add persistent cleared notifications state
     const [clearedNotifications, setClearedNotifications] = useState(() => {
-        const saved = localStorage.getItem('clearedNotifications');
+        const key = getClearedNotificationsKey(user);
+        const saved = localStorage.getItem(key);
         return saved ? JSON.parse(saved) : [];
     });
 
@@ -128,28 +129,30 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
     // Updated clear all notifications function with persistence
     const handleClearAllNotifications = async (e) => {
         e.stopPropagation();
-        console.log('Clear All clicked - Current notifications:', expiringItems.length);
-        
         setClearing(true);
         try {
             if (clearAllNotifications) {
                 await clearAllNotifications();
             }
-            
-            // Save the cleared notification IDs to localStorage
             const notificationIds = expiringItems.map(item => item.serialNumber || item.id);
             const updatedCleared = [...clearedNotifications, ...notificationIds];
             setClearedNotifications(updatedCleared);
-            localStorage.setItem('clearedNotifications', JSON.stringify(updatedCleared));
-            
+            localStorage.setItem(getClearedNotificationsKey(user), JSON.stringify(updatedCleared));
             message.success('All notifications cleared');
         } catch (error) {
-            console.error('Failed to clear notifications:', error);
             message.error('Failed to clear notifications');
         } finally {
             setClearing(false);
         }
     };
+
+
+    // Update cleared notifications when user changes
+    React.useEffect(() => {
+        const key = getClearedNotificationsKey(user);
+        const saved = localStorage.getItem(key);
+        setClearedNotifications(saved ? JSON.parse(saved) : []);
+    }, [user]);
 
 
     // Define main navigation items for the top bar
@@ -629,6 +632,11 @@ const AppLayout = ({ user, handleLogout, expiringItems, refreshExpiringItems, la
         </Layout>
     );
 };
+
+
+// Helper to get a unique localStorage key for cleared notifications per user
+const getClearedNotificationsKey = (user) => 
+    user?.email ? `clearedNotifications_${user.email}` : 'clearedNotifications';
 
 
 export default AppLayout;
