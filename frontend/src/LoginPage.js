@@ -218,60 +218,31 @@ const LoginPage = ({ onLogin }) => {
     };
 
     // Send password reset email using your email form approach
-    const sendPasswordResetEmail = async () => {
-        if (!forgotEmail) {
-            setForgotStatus('Please enter your email address.');
-            return;
-        }
-
-        const emailRegex = /\S+@\S+\.\S+/;
-        if (!emailRegex.test(forgotEmail)) {
-            setForgotStatus('Please enter a valid email address.');
-            return;
-        }
-
-        setForgotLoading(true);
-        setForgotStatus('');
-
-        try {
-            // Generate reset link (you can customize this URL)
-            const resetLink = `${window.location.origin}/reset-password?token=temp-token&email=${encodeURIComponent(forgotEmail)}`;
-            
-            // Create password reset message
-            const resetMessage = `Hello,
-
-You requested to reset your password for the IT Asset Management Dashboard.
-
-Click the link below to reset your password:
-${resetLink}
-
-If you didn't request this password reset, please ignore this email.
-
-This link will expire in 1 hour for security reasons.
-
-Best regards,
-IT Department`;
-
-            // Send email using your email endpoint format
-            const res = await axios.post("http://localhost:5000/send-email", {
-                to: forgotEmail,
-                subject: "Password Reset Request - IT Asset Management",
-                message: resetMessage,
-            });
-
-            setForgotStatus(res.data.message || "Email sent successfully!");
-            
-            // Auto close modal after 3 seconds on success
-            setTimeout(() => {
-                closeForgotModal();
-            }, 3000);
-
-        } catch (error) {
-            setForgotStatus("Error sending email: " + (error.response?.data?.message || error.message));
-        } finally {
-            setForgotLoading(false);
-        }
-    };
+    // ...existing code...
+const sendPasswordResetEmail = async () => {
+    if (!forgotEmail) {
+        setForgotStatus('Please enter your email address.');
+        return;
+    }
+    const emailRegex = /\S+@\S+\.\S+/;
+    if (!emailRegex.test(forgotEmail)) {
+        setForgotStatus('Please enter a valid email address.');
+        return;
+    }
+    setForgotLoading(true);
+    setForgotStatus('');
+    try {
+        await axios.post('http://localhost:5000/api/forgot-password', { email: forgotEmail });
+        setForgotStatus("Reset link sent! Please check your email.");
+        setTimeout(() => {
+            closeForgotModal();
+        }, 3000);
+    } catch (error) {
+        setForgotStatus("Error sending reset link: " + (error.response?.data?.message || error.message));
+    } finally {
+        setForgotLoading(false);
+    }
+};
 
     // Complete Responsive Styles
     const styles = {

@@ -94,6 +94,7 @@ const RemovedAssetsTable = () => {
         }));
     };
 
+    
     const columns = [
         {
             title: 'Sl No',
@@ -154,20 +155,27 @@ const RemovedAssetsTable = () => {
                     />
                 )}
 
-                <Space className="removed-assets-header">
-                    <Title level={3} className="removed-assets-title">Removed Assets -</Title>
-                    <div className="removed-assets-description">
-                        Implies the asset has left the organization's control, either through sale, donation, or disposal.
-                    </div>
-                    <Search
-                        className="removed-assets-search-input"
-                        placeholder="Search removed assets..."
-                        onSearch={handleSearch}
-                        onChange={e => handleSearch(e.target.value)}
-                        value={searchText}
-                        allowClear
-                    />
-                </Space>
+                <Space direction="vertical" size="small" style={{ width: '100%' }}>
+    <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+            <Title level={3} className="removed-assets-title" style={{ marginBottom: '4px' }}>
+                Removed Assets
+            </Title>
+            <div style={{ fontSize: '14px', fontWeight: 'normal', color: '#666', marginTop: '0' }}>
+                Implies the asset has left the organization's control, either through sale, donation, or disposal.
+            </div>
+        </div>
+        <Search
+            className="removed-assets-search-input"
+            placeholder="Search removed assets..."
+            onSearch={handleSearch}
+            onChange={e => handleSearch(e.target.value)}
+            value={searchText}
+            allowClear
+        />
+    </div>
+</Space>
+
 
                 <Table
                     className="removed-assets-table"

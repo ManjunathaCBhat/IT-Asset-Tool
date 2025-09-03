@@ -11,7 +11,8 @@ const moment = require('moment');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
+const { ConfidentialClientApplication } = require('@azure/msal-node');
+const { Client } = require('@microsoft/microsoft-graph-client');
 // --- Middleware ---
 app.use(cors());
 app.use(express.json());
@@ -25,12 +26,16 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT),
-    secure: false, // true for 465, false for other ports
+    secure: process.env.SMTP_PORT == '465', // true for 465, false for other ports
     auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
     },
+    tls: {
+        rejectUnauthorized: false // For corporate servers with self-signed certs
+    }
 });
+
 
 // Test transporter configuration
 transporter.verify(function (error, success) {
@@ -46,47 +51,87 @@ const resetTokens = new Map();
 
 // --- Email function ---
 const sendResetEmail = async (email, resetToken) => {
-    // Create reset link
     const resetLink = `http://localhost:3000/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
-
-    const mailOptions = {
-        from: `"IT Asset Management" <${process.env.SMTP_USER}>`,
-        to: email,
-        subject: 'Password Reset Request - IT Asset Management',
-        html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #2C4B84;">Password Reset Request</h2>
-                <p>Hello,</p>
-                <p>You have requested to reset your password for the IT Asset Management system.</p>
-                <p>Please click the button below to reset your password:</p>
-                <div style="text-align: center; margin: 30px 0;">
-                    <a href="${resetLink}" 
-                       style="background-color: #296bd5; color: white; padding: 12px 30px; 
-                              text-decoration: none; border-radius: 8px; font-weight: bold;
-                              display: inline-block;">
-                        Reset Password
-                    </a>
-                </div>
-                <p>Or copy and paste this link in your browser:</p>
-                <p style="word-break: break-all; color: #666;">${resetLink}</p>
-                <p><strong>This link will expire in 1 hour.</strong></p>
-                <p>If you did not request this password reset, please ignore this email.</p>
-                <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
-                <p style="color: #666; font-size: 12px;">
-                    This is an automated message from IT Asset Management System.
-                </p>
+    const subject = 'Password Reset Request - IT Asset Management';
+    const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2C4B84;">Password Reset Request</h2>
+            <p>Hello,</p>
+            <p>You have requested to reset your password for the IT Asset Management system.</p>
+            <p>Please click the button below to reset your password:</p>
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="${resetLink}" 
+                   style="background-color: #296bd5; color: white; padding: 12px 30px; 
+                          text-decoration: none; border-radius: 8px; font-weight: bold;
+                          display: inline-block;">
+                    Reset Password
+                </a>
             </div>
-        `,
-    };
+            <p>Or copy and paste this link in your browser:</p>
+            <p style="word-break: break-all; color: #666;">${resetLink}</p>
+            <p><strong>This link will expire in 1 hour.</strong></p>
+            <p>If you did not request this password reset, please ignore this email.</p>
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+            <p style="color: #666; font-size: 12px;">
+                This is an automated message from IT Asset Management System.
+            </p>
+        </div>
+    `;
 
+    // --- Try Microsoft Graph API ---
     try {
-        console.log('Attempting to send email to:', email);
-        const result = await transporter.sendMail(mailOptions);
-        console.log('Email sent successfully:', result.messageId);
+        const msalConfig = {
+            auth: {
+                clientId: process.env.AZURE_CLIENT_ID,
+                authority: `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}`,
+                clientSecret: process.env.AZURE_CLIENT_SECRET,
+            }
+        };
+        const cca = new ConfidentialClientApplication(msalConfig);
+        const authResponse = await cca.acquireTokenByClientCredential({
+            scopes: ['https://graph.microsoft.com/.default'],
+        });
+
+        const graphClient = Client.init({
+            authProvider: (done) => {
+                done(null, authResponse.accessToken);
+            }
+        });
+
+        await graphClient.api('/users/' + email + '/sendMail').post({
+            message: {
+                subject: subject,
+                body: {
+                    contentType: "HTML",
+                    content: htmlContent
+                },
+                toRecipients: [
+                    { emailAddress: { address: email } }
+                ]
+            }
+        });
+
+        console.log('Email sent via Microsoft Graph API to:', email);
         return { success: true };
     } catch (error) {
-        console.error('Email sending failed:', error);
-        return { success: false, error: error.message };
+        console.error('Graph API failed, falling back to Nodemailer:', error.message);
+
+        // --- Fallback to Nodemailer ---
+        const mailOptions = {
+            from: `"IT Asset Management" <${process.env.SENDGRID_FROM_EMAIL}>`,
+            to: email,
+            subject: subject,
+            html: htmlContent,
+        };
+
+        try {
+            const result = await transporter.sendMail(mailOptions);
+            console.log('Email sent via Nodemailer:', result.messageId);
+            return { success: true };
+        } catch (err) {
+            console.error('Nodemailer failed:', err.message);
+            return { success: false, error: err.message };
+        }
     }
 };
 
@@ -273,7 +318,7 @@ app.post("/send-email", async (req, res) => {
     
     try {
         await transporter.sendMail({
-            from: `"IT Department" <${process.env.SMTP_USER}>`,
+            from: `"IT Department" <${process.env.SENDGRID_FROM_EMAIL}>`,
             to,
             subject,
             text: message,
@@ -291,8 +336,8 @@ app.post("/send-email", async (req, res) => {
 app.get('/test-email', async (req, res) => {
     try {
         const mailOptions = {
-            from: `"IT Asset Management Test" <${process.env.SMTP_USER}>`,
-            to: 'your-test-email@example.com', // Change this to your email
+            from: `"IT Asset Management Test" <${process.env.SENDGRID_FROM_EMAIL}>`,
+            to: 'anusha.k@cirruslabs.io', // Change this to your email
             subject: 'SMTP Test Email',
             text: 'If you receive this email, your SMTP configuration is working correctly!'
         };

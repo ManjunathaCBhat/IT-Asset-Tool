@@ -44,11 +44,6 @@ const EWaste = ({ user }) => {
 
     const onSearch = (value) => {
         setSearchText(value);
-        // Optional: validate the search text before filtering
-        // if (!validateSearchText(value)) {
-        //     message.warning("Please enter only letters, numbers and spaces.");
-        //     return;
-        // }
         const filtered = data.filter((item) =>
             item.category?.toLowerCase().includes(value.toLowerCase()) ||
             item.model?.toLowerCase().includes(value.toLowerCase()) ||

@@ -202,7 +202,7 @@ const AddEquipment = () => {
                     label="Model / Brand"
                     rules={[
                       { required: true, message: 'Please enter the model' },
-                      { min: 5, message: 'Model must be at least 5 characters' }
+                      { min: 2, message: 'Model must be at least 5 characters' }
                     ]}
                     style={{ marginBottom: 12 }}
                   >

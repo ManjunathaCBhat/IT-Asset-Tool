@@ -487,7 +487,7 @@ const InUse = ({ user }) => {
                  name="model"
                  rules={[
                    { required: true },
-                   { min: 5, message: 'Model must be at least 5 characters' }
+                   { min: 2, message: 'Model must be at least 2 characters' }
                  ]}
                >
                  <Input />
