@@ -9,6 +9,8 @@ const nodemailer = require('nodemailer');
 require('dotenv').config();
 const moment = require('moment');
 
+const path = require('path');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const { ConfidentialClientApplication } = require('@azure/msal-node');
@@ -51,7 +53,7 @@ const resetTokens = new Map();
 
 // --- Email function ---
 const sendResetEmail = async (email, resetToken) => {
-    const resetLink = `http://localhost:3000/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+    const resetLink = `http://localhost:5000/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
     const subject = 'Password Reset Request - IT Asset Management';
     const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -893,6 +895,17 @@ app.delete('/api/equipment/:id', [auth, requireRole(['Admin'])], async (req, res
         res.status(500).json({ message: err.message });
     }
 });
+
+
+
+// Correct paths for your frontend folder
+app.use(express.static(path.join(__dirname, '../frontend/build')));
+app.get('/*path', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
+});
+
+
+
 
 // --- Server Start ---
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
