@@ -1,11 +1,13 @@
 {
-  "dependencies": {
-    "@azure/msal-node": "^3.7.3",
-    "@microsoft/microsoft-graph-client": "^3.0.7",
-    "nodemailer": "^7.0.6",
-    "react-scripts": "^0.0.0"
-  },
+  "name": "it-asset-version01-root",
+  "private": true,
   "scripts": {
-    "dev": "node dev-build.js"
+    "install-all": "cd IT-Asset-Tool/backend && npm install && cd ../frontend && npm install",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd IT-Asset-Tool/backend && npm start",
+    "client": "cd IT-Asset-Tool/frontend && npm start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }
