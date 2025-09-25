@@ -264,7 +264,7 @@ const InUse = ({ user }) => {
 
   const fetchInUseAssets = useCallback(async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/equipment', { headers: getAuthHeader() });
+      const response = await axios.get(`${API_BASE_URL}/api/equipment`, { headers: getAuthHeader() });
       const inUseAssets = response.data.filter((item) => item.status === 'In Use');
       setData(inUseAssets);
       setFilteredData(inUseAssets);
@@ -349,7 +349,7 @@ const InUse = ({ user }) => {
         if (payloadToSend[k] === "") payloadToSend[k] = null;
 
       await axios.put(
-        `http://localhost:5000/api/equipment/${selectedAsset._id}`,
+        `${API_BASE_URL}/api/equipment/${selectedAsset._id}`,
         payloadToSend,
         { headers: getAuthHeader() }
       );
@@ -383,7 +383,7 @@ const InUse = ({ user }) => {
   const handleMoveStatus = async (record, newStatus) => {
     try {
       await axios.put(
-        `http://localhost:5000/api/equipment/${record._id}`,
+        `${API_BASE_URL}/api/equipment/${record._id}`,
         { status: newStatus },
         { headers: getAuthHeader() }
       );

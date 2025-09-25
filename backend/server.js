@@ -53,7 +53,7 @@ const resetTokens = new Map();
 
 // --- Email function ---
 const sendResetEmail = async (email, resetToken) => {
-    const resetLink = `http://localhost:5000/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+    const resetLink = `${API_BASE_URL}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
     const subject = 'Password Reset Request - IT Asset Management';
     const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

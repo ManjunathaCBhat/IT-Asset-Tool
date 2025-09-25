@@ -27,7 +27,7 @@ const EWaste = ({ user }) => {
 
     const fetchEWasteAssets = async () => {
         try {
-            const response = await axios.get('http://localhost:5000/api/equipment', {
+            const response = await axios.get('${API_BASE_URL}/api/equipment', {
                 headers: getAuthHeader(),
             });
             const ewasteAssets = response.data.filter(item => item.status === 'E-Waste');
@@ -64,7 +64,7 @@ const EWaste = ({ user }) => {
 
     const handleDelete = async (record) => {
         try {
-            await axios.put(`http://localhost:5000/api/equipment/${record._id}`, {
+            await axios.put(`${API_BASE_URL}/api/equipment/${record._id}`, {
                 status: 'Removed',
                 removalDate: moment().toISOString(),
                 originalStatus: 'E-Waste',

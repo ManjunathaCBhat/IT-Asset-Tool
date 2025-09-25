@@ -1,3 +1,4 @@
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { message } from 'antd';
@@ -193,7 +194,7 @@ const LoginPage = ({ onLogin }) => {
         setError('');
 
         try {
-            const response = await axios.post('http://localhost:5000/api/users/login', { email, password });
+            const response = await axios.post(`${API_BASE_URL}/api/users/login`, { email, password });
             message.success('Login Successful!');
             onLogin(response.data);
         } catch (err) {
@@ -232,7 +233,7 @@ const sendPasswordResetEmail = async () => {
     setForgotLoading(true);
     setForgotStatus('');
     try {
-        await axios.post('http://localhost:5000/api/forgot-password', { email: forgotEmail });
+        await axios.post(`${API_BASE_URL}/api/forgot-password`, { email: forgotEmail });
         setForgotStatus("Reset link sent! Please check your email.");
         setTimeout(() => {
             closeForgotModal();

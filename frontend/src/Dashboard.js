@@ -1,3 +1,4 @@
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 import React, { useEffect, useState, useCallback } from 'react';
 import { Card, Col, Row, Statistic, Typography, Spin, Alert, Button, Space, List } from 'antd';
 import {
@@ -126,7 +127,7 @@ const Dashboard = () => {
         setLoading(true);
         setError(null);
         try {
-            const allAssetsRes = await axios.get('http://localhost:5000/api/equipment', {
+            const allAssetsRes = await axios.get(`${API_BASE_URL}/api/equipment`, {
                 headers: getAuthHeader(),
                 params: { _t: Date.now() }
             });

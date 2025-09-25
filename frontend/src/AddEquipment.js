@@ -24,7 +24,7 @@ const AddEquipment = () => {
     const prefix = cat ? cat.substring(0, 3).toUpperCase() : 'OTH';
     try {
       const response = await axios.get(
-        `http://localhost:5000/api/equipment/count/${encodeURIComponent(cat)}`,
+        `${API_BASE_URL}/api/equipment/count/${encodeURIComponent(cat)}`,
         { headers: getAuthHeader() }
       );
       const count = response.data.count || 0;
@@ -62,7 +62,7 @@ const AddEquipment = () => {
       delete finalValues.department;
       delete finalValues.damageDescription;
 
-      await axios.post('http://localhost:5000/api/equipment', finalValues, { headers: getAuthHeader() });
+      await axios.post('${API_BASE_URL}/api/equipment', finalValues, { headers: getAuthHeader() });
       message.success('Equipment added successfully!');
       form.resetFields();
       setCategory('');

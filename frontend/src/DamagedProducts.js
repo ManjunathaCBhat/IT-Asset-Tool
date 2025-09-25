@@ -79,7 +79,7 @@ const DamagedProducts = ({ user }) => {
   // Fetch assets with status Damaged
   const fetchAssets = useCallback(async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/equipment', { headers: getAuthHeader() });
+      const response = await axios.get('${API_BASE_URL}/api/equipment', { headers: getAuthHeader() });
       const list = response.data.filter(a => a.status === 'Damaged');
       setData(list);
       setFilteredData(list);
@@ -126,7 +126,7 @@ const DamagedProducts = ({ user }) => {
     if (!assetToRepair) return;
     try {
       await axios.put(
-        `http://localhost:5000/api/equipment/${assetToRepair._id}`,
+        `${API_BASE_URL}/api/equipment/${assetToRepair._id}`,
         { status: 'In Stock' },
         { headers: getAuthHeader() }
       );
@@ -147,7 +147,7 @@ const DamagedProducts = ({ user }) => {
   const handleMoveToEWaste = async (asset) => {
     try {
       await axios.put(
-        `http://localhost:5000/api/equipment/${asset._id}`,
+        `${API_BASE_URL}/api/equipment/${asset._id}`,
         { status: 'E-Waste' },
         { headers: getAuthHeader() }
       );
@@ -162,7 +162,7 @@ const DamagedProducts = ({ user }) => {
   const handleRemoveFromDamaged = async (asset) => {
     try {
       await axios.put(
-        `http://localhost:5000/api/equipment/${asset._id}`,
+        `${API_BASE_URL}/api/equipment/${asset._id}`,
         { status: 'Removed' },
         { headers: getAuthHeader() }
       );

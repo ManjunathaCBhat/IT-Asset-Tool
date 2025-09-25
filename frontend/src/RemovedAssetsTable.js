@@ -1,3 +1,4 @@
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 import React, { useEffect, useState } from 'react';
 import { Table, Spin, Alert, Typography, Input, Space, Tag } from 'antd';
 import axios from 'axios';
@@ -44,7 +45,7 @@ const RemovedAssetsTable = () => {
         try {
             setLoading(true);
             setError(null);
-            const response = await axios.get('http://localhost:5000/api/equipment/removed', {
+            const response = await axios.get(`${API_BASE_URL}/api/equipment/removed`, {
                 headers: getAuthHeader(),
             });
             // Debug: See data format

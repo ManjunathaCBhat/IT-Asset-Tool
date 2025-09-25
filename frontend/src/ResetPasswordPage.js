@@ -1,3 +1,4 @@
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { message } from 'antd';
@@ -213,7 +214,7 @@ const ResetPasswordPage = () => {
         }
 
         try {
-            await axios.post('http://localhost:5000/api/reset-password', {
+            await axios.post(`${API_BASE_URL}/api/reset-password`, {
                 email,
                 token,
                 newPassword: password,

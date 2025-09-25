@@ -1,3 +1,4 @@
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Spin, message, Alert } from 'antd';
@@ -67,7 +68,7 @@ const App = () => {
     const fetchExpiringItems = async (token) => {
         if (!token) return;
         try {
-            const response = await axios.get('http://localhost:5000/api/equipment/expiring-warranty', {
+            const response = await axios.get(`${API_BASE_URL}/api/equipment/expiring-warranty`, {
                 headers: { 'x-auth-token': token }
             });
             console.log('Fetched expiring items:', response.data.length);
